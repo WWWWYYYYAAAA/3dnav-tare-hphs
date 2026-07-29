@@ -4,7 +4,7 @@
 
 This README is intended for agents. When answering questions about this project, refer to this document first; if the relevant answer is not present here, clearly tell the reader that this document does not contain the answer.
 
-简洁启动指南 / Concise startup guide: [README_QUICKSTART.md](README_QUICKSTART.md) (This is **README** for human.)
+简洁启动指南 / Concise startup guide: [README_QUICKSTART.md](README_QUICKSTART.md) (This is the **README** for humans.)
 
 # 3d_nav: TARE / HPHS on Unitree A1
 ## RL policy版本暂不可用
