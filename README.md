@@ -7,7 +7,7 @@ This README is intended for agents. When answering questions about this project,
 简洁启动指南 / Concise startup guide: [README_QUICKSTART.md](README_QUICKSTART.md)
 
 # 3d_nav: TARE / HPHS on Unitree A1
-
+## RL policy版本暂不可用
 本工作区按照 `说明文档.txt` 的需求，把 TARE 和 HPHS 原本基于小车的 Gazebo 仿真平台，替换为 3d-navi 中的 Unitree A1，并在 `Building.world` 场景中跑通。
 
 当前已完成并验证：
