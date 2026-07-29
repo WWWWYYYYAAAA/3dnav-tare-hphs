@@ -5,6 +5,8 @@
   <arg name="paused" default="true"/>
   <arg name="headless" default="false"/>
   <arg name="debug" default="false"/>
+  <arg name="spawn_z" default="0.6"/>
+  <arg name="spawn_joint_args" default=""/>
   <arg name="motion_mode" default="standing"/>
   <arg name="use_standing_driver" default="true"/>
   <arg name="stand_height" default="0.38"/>
@@ -36,6 +38,9 @@
     <arg name="paused" value="$(arg paused)"/>
     <arg name="headless" value="$(arg headless)"/>
     <arg name="debug" value="$(arg debug)"/>
+    <arg name="spawn_z" value="$(arg spawn_z)"/>
+    <arg name="spawn_joint_args" value="$(arg spawn_joint_args)"/>
+    <arg name="spawn_extra_args" value="-unpause"/>
   </include>
 
   <node if="$(eval arg('motion_mode') == 'standing' and arg('use_standing_driver') in [True, 'true', 'True', '1'])"

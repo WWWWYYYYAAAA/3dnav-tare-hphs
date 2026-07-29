@@ -4,6 +4,8 @@
 
 This README is intended for agents. When answering questions about this project, refer to this document first; if the relevant answer is not present here, clearly tell the reader that this document does not contain the answer.
 
+简洁启动指南 / Concise startup guide: [README_QUICKSTART.md](README_QUICKSTART.md)
+
 # 3d_nav: TARE / HPHS on Unitree A1
 
 本工作区按照 `说明文档.txt` 的需求，把 TARE 和 HPHS 原本基于小车的 Gazebo 仿真平台，替换为 3d-navi 中的 Unitree A1，并在 `Building.world` 场景中跑通。
@@ -31,7 +33,7 @@ This README is intended for agents. When answering questions about this project,
 | 构建工具 | `catkin_make` |
 | Python | Python 3.8，随 Noetic / Ubuntu 20.04 |
 
-当前 TARE / HPHS + A1 集成默认不需要 CUDA、libtorch、PCT-planner、ego-planner 或真实 A1 walking policy。默认运动后端是 `motion_mode:=standing`，用于稳定跑通探索链路；如果要启用本地 TorchScript RL policy，可切换为 `motion_mode:=rl`。RL 模式需要容器内安装 PyTorch。
+当前 TARE / HPHS + A1 集成默认不需要 CUDA、libtorch、PCT-planner、ego-planner 或真实 A1 walking policy。默认运动后端是 `motion_mode:=standing`，用于稳定跑通探索链路；固定站姿模式不需要 policy，也不需要 PyTorch。如果要启用本地 TorchScript RL policy，可切换为 `motion_mode:=rl`。RL 模式需要容器内安装 PyTorch。
 
 ## 第三方源码
 
@@ -162,6 +164,15 @@ apt-get install -y \
 
 ### 1. 启动或创建 Docker
 
+可以使用本机已有容器，也可以直接拉取已配置好的 DockerHub 环境镜像。镜像只包含 ROS / Gazebo / PyTorch 等运行环境，不包含 bind mount 的项目源码；仍需要把项目父目录挂载到 `/workspace`。
+
+DockerHub 镜像地址占位：
+
+```text
+<dockerhub_namespace>/3dnav-ros-noetic:base
+<dockerhub_namespace>/3dnav-ros-noetic:x11
+```
+
 如果 `ros-noetic` 容器已经存在：
 
 ```bash
@@ -175,6 +186,15 @@ docker exec -it ros-noetic bash
 docker run -it --name ros-noetic --net=host \
   -v /home/wya/nav:/workspace \
   osrf/ros:noetic-desktop-full bash
+```
+
+如果使用已配置好的 DockerHub 镜像创建：
+
+```bash
+docker pull <dockerhub_namespace>/3dnav-ros-noetic:base
+docker run -it --name ros-noetic --net=host \
+  -v /home/wya/nav:/workspace \
+  <dockerhub_namespace>/3dnav-ros-noetic:base bash
 ```
 
 这里 `/home/wya/nav` 是宿主机上的项目父目录。别人复现时把它替换成自己的路径即可，例如项目位于 `/home/alice/nav/3d_nav`，就挂载：
@@ -203,6 +223,21 @@ docker run -dit --name ros-noetic-x11 --net=host \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
   -v /home/wya/nav:/workspace \
   ros-noetic-3dnav:x11-base bash
+```
+
+如果使用已配置好的 DockerHub X11 镜像创建：
+
+```bash
+docker pull <dockerhub_namespace>/3dnav-ros-noetic:x11
+xhost +si:localuser:root
+docker run -dit --name ros-noetic-x11 --net=host \
+  -e DISPLAY=:0 \
+  -e QT_X11_NO_MITSHM=1 \
+  -e LIBGL_ALWAYS_SOFTWARE=1 \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+  -v /home/wya/nav:/workspace \
+  <dockerhub_namespace>/3dnav-ros-noetic:x11 bash
+docker exec -it ros-noetic-x11 bash
 ```
 
 这里也要把 `/home/wya/nav` 替换为自己的项目父目录。
@@ -235,7 +270,7 @@ QT_OK 2560 1440
 
 ### 1.2 给 Docker 补 pip 和 PyTorch
 
-`osrf/ros:noetic-desktop-full` 默认没有 `pip` 和 PyTorch；当前网络下 Ubuntu apt 源也可能不可用，所以本项目使用宿主机下载 wheel、容器内离线安装的方式。
+`osrf/ros:noetic-desktop-full` 默认没有 `pip` 和 PyTorch；当前网络下 Ubuntu apt 源也可能不可用，所以本项目使用宿主机下载 wheel、容器内离线安装的方式。如果使用上面的 DockerHub 镜像，PyTorch 已经内置，通常不需要执行本节安装脚本。
 
 当前机器已经准备好本地缓存：
 
@@ -307,7 +342,7 @@ source devel/setup.bash
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38
+  use_standing_driver:=true stand_height:=0.34
 ```
 
 如果需要 Gazebo GUI 和 RViz：
@@ -319,7 +354,7 @@ source devel/setup.bash
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=true headless:=false paused:=false rviz:=true \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38
+  use_standing_driver:=true stand_height:=0.34
 ```
 
 ### 4. 运行 HPHS 版本
@@ -346,7 +381,7 @@ source devel/setup.bash
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38 \
+  use_standing_driver:=true stand_height:=0.34 \
   tf_time_offset:=0.10
 ```
 
@@ -359,7 +394,7 @@ source devel/setup.bash
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=true headless:=false paused:=false rviz:=true \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38 \
+  use_standing_driver:=true stand_height:=0.34 \
   tf_time_offset:=0.10
 ```
 
@@ -567,7 +602,7 @@ third_party/unitree_ros-master/unitree_gazebo/models/Building/model.sdf
 
 | 模式 | 参数 | 节点 | 用途 |
 | --- | --- | --- | --- |
-| 固定站姿移动 | `motion_mode:=standing` | `standing_a1_driver.py` | 默认模式，稳定跑通 TARE / HPHS / 雷达 / 地图 / 可视化 |
+| 固定站姿移动 | `motion_mode:=standing` | `standing_a1_driver.py` | 默认模式，不需要 policy / PyTorch，稳定跑通 TARE / HPHS / 雷达 / 地图 / 可视化 |
 | RL policy 驱动 | `motion_mode:=rl` | `a1_rl_policy_driver.py` | 使用本地 TorchScript policy 控制 12 个关节，依赖 PyTorch |
 
 默认仍是 `motion_mode:=standing`，所以原有 TARE / HPHS 运行方式不受影响。
@@ -596,7 +631,7 @@ src/a1_exploration_bridge/scripts/standing_a1_driver.py
 默认站立高度：
 
 ```text
-stand_height:=0.38
+stand_height:=0.34
 ```
 
 这个节点在下面三个 launch 中默认开启：
@@ -607,10 +642,12 @@ a1_exploration_bridge/tare_a1_building.launch
 a1_exploration_bridge/hphs_a1_building.launch
 ```
 
+固定站姿模式只启动 `standing_a1_driver.py`，不会启动 `a1_rl_policy_driver.py`，也不会读取 `rl_policy_path`。启动 standing 时不要传 `rl_policy_path`；只有 `motion_mode:=rl` 才需要 policy 文件和 PyTorch。
+
 正常运行时可以显式保留：
 
 ```bash
-use_standing_driver:=true stand_height:=0.38
+use_standing_driver:=true stand_height:=0.34
 ```
 
 如果不想启动任何 A1 运动后端，可以关闭临时站立驱动：
@@ -831,7 +868,7 @@ source devel/setup.bash
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38
+  use_standing_driver:=true stand_height:=0.34
 ```
 
 打开 GUI / RViz 时可改为：
@@ -840,7 +877,7 @@ roslaunch a1_exploration_bridge tare_a1_building.launch \
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=true headless:=false paused:=false rviz:=true \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38
+  use_standing_driver:=true stand_height:=0.34
 ```
 
 本次 TARE 实测结果：
@@ -883,7 +920,7 @@ source devel/setup.bash
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38 \
+  use_standing_driver:=true stand_height:=0.34 \
   tf_time_offset:=0.10
 ```
 
@@ -893,7 +930,7 @@ roslaunch a1_exploration_bridge hphs_a1_building.launch \
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=true headless:=false paused:=false rviz:=true \
   motion_mode:=standing \
-  use_standing_driver:=true stand_height:=0.38 \
+  use_standing_driver:=true stand_height:=0.34 \
   tf_time_offset:=0.10
 ```
 
@@ -1016,13 +1053,13 @@ roslaunch a1_exploration_bridge hphs_a1_building.launch \
 如果使用当前临时站立驱动，A1 机体高度由 `stand_height` 控制，默认：
 
 ```text
-stand_height:=0.38
+stand_height:=0.34
 ```
 
 因此默认雷达中心离地高度约为：
 
 ```text
-stand_height + scan_offset_z = 0.38 + 0.19 = 0.57 m
+stand_height + scan_offset_z = 0.34 + 0.19 = 0.53 m
 ```
 
 注意：HPHS 上游旧 launch 里的 `vehicleHeight:=0.75` 属于旧小车仿真器 `cmu_vehicle_simulator`，当前 A1 版本没有启动它，不要用这个值来设置 A1 的雷达安装高度。
