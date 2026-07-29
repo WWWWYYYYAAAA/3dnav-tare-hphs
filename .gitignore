@@ -10,3 +10,4 @@ src/vendor/
 *.bag
 *.pyc
 __pycache__/
+docker_img/

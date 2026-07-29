@@ -1,13 +1,13 @@
 # 3d_nav: TARE / HPHS on Unitree A1
 ## 1. 选择容器
 
-本项目可以使用本机已有容器，也可以直接拉取已配置好的 DockerHub 环境镜像。镜像只包含 ROS / Gazebo / PyTorch 等运行环境，不包含 bind mount 的项目源码；仍需要把项目父目录挂载到 `/workspace`。
+本项目可以使用本机已有容器，也可以从随项目分发的 Docker 镜像压缩包安装环境。镜像只包含 ROS / Gazebo / PyTorch 等运行环境，不包含 bind mount 的项目源码；仍需要把项目父目录挂载到 `/workspace`。
 
-DockerHub 镜像地址占位：
+镜像压缩包路径：
 
 ```text
-<dockerhub_namespace>/3dnav-ros-noetic:base
-<dockerhub_namespace>/3dnav-ros-noetic:x11
+docker_img/3dnav-ros-noetic-base.tar.gz
+docker_img/3dnav-ros-noetic-x11.tar.gz
 ```
 
 无可视化 / headless：
@@ -17,13 +17,13 @@ docker start ros-noetic
 docker exec -it ros-noetic bash
 ```
 
-如果本机没有 `ros-noetic` 容器，可以从 DockerHub 镜像创建：
+如果本机没有 `ros-noetic` 容器，可以先加载镜像包再创建：
 
 ```bash
-docker pull <dockerhub_namespace>/3dnav-ros-noetic:base
+docker load < docker_img/3dnav-ros-noetic-base.tar.gz
 docker run -it --name ros-noetic --net=host \
   -v /home/wya/nav:/workspace \
-  <dockerhub_namespace>/3dnav-ros-noetic:base bash
+  3dnav-ros-noetic:base bash
 ```
 
 有可视化 / Gazebo GUI + RViz：
@@ -34,10 +34,10 @@ docker start ros-noetic-x11
 docker exec -it ros-noetic-x11 bash
 ```
 
-如果本机没有 `ros-noetic-x11` 容器，可以从 DockerHub 镜像创建：
+如果本机没有 `ros-noetic-x11` 容器，可以先加载镜像包再创建：
 
 ```bash
-docker pull <dockerhub_namespace>/3dnav-ros-noetic:x11
+docker load < docker_img/3dnav-ros-noetic-x11.tar.gz
 xhost +si:localuser:root
 docker run -dit --name ros-noetic-x11 --net=host \
   -e DISPLAY=:0 \
@@ -45,7 +45,7 @@ docker run -dit --name ros-noetic-x11 --net=host \
   -e LIBGL_ALWAYS_SOFTWARE=1 \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
   -v /home/wya/nav:/workspace \
-  <dockerhub_namespace>/3dnav-ros-noetic:x11 bash
+  3dnav-ros-noetic:x11 bash
 docker exec -it ros-noetic-x11 bash
 ```
 
@@ -60,7 +60,7 @@ source devel/setup.bash
 
 固定站姿模式 `motion_mode:=standing` 不需要 policy，也不需要 PyTorch。
 
-RL 模式 `motion_mode:=rl` 才需要 PyTorch。DockerHub 镜像已内置 PyTorch；如果使用的是原始 `osrf/ros:noetic-desktop-full` 容器，且容器里还没有 `torch`：
+RL 模式 `motion_mode:=rl` 才需要 PyTorch。`docker_img` 镜像包已内置 PyTorch；如果使用的是原始 `osrf/ros:noetic-desktop-full` 容器，且容器里还没有 `torch`：
 
 ```bash
 cd /workspace/3d_nav
@@ -227,6 +227,20 @@ POLICY_OK (1, 12)
 cd /workspace/3d_nav
 ./scripts/cleanup_ros_gazebo.sh
 source devel/setup.bash
+```
+
+如果 Gazebo GUI 里还显示上一次启动留下的运动轨迹，通常是 `gzclient` / `gzserver` / 轨迹可视化插件的历史显示没有清掉。先在当前容器清理：
+
+```bash
+cd /workspace/3d_nav
+./scripts/cleanup_ros_gazebo.sh
+source devel/setup.bash
+```
+
+如果使用 X11 容器，也在 `ros-noetic-x11` 里执行同样命令；最稳妥的方式是重启两个 host network 容器：
+
+```bash
+docker restart ros-noetic ros-noetic-x11
 ```
 
 如果 X11 / RViz 打不开，确认使用的是 `ros-noetic-x11`，并在宿主机执行过：

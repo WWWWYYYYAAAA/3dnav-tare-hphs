@@ -164,13 +164,13 @@ apt-get install -y \
 
 ### 1. 启动或创建 Docker
 
-可以使用本机已有容器，也可以直接拉取已配置好的 DockerHub 环境镜像。镜像只包含 ROS / Gazebo / PyTorch 等运行环境，不包含 bind mount 的项目源码；仍需要把项目父目录挂载到 `/workspace`。
+可以使用本机已有容器，也可以从随项目分发的 Docker 镜像压缩包安装环境。镜像只包含 ROS / Gazebo / PyTorch 等运行环境，不包含 bind mount 的项目源码；仍需要把项目父目录挂载到 `/workspace`。
 
-DockerHub 镜像地址占位：
+镜像压缩包路径：
 
 ```text
-<dockerhub_namespace>/3dnav-ros-noetic:base
-<dockerhub_namespace>/3dnav-ros-noetic:x11
+docker_img/3dnav-ros-noetic-base.tar.gz
+docker_img/3dnav-ros-noetic-x11.tar.gz
 ```
 
 如果 `ros-noetic` 容器已经存在：
@@ -188,13 +188,13 @@ docker run -it --name ros-noetic --net=host \
   osrf/ros:noetic-desktop-full bash
 ```
 
-如果使用已配置好的 DockerHub 镜像创建：
+如果使用已配置好的镜像压缩包创建：
 
 ```bash
-docker pull <dockerhub_namespace>/3dnav-ros-noetic:base
+docker load < docker_img/3dnav-ros-noetic-base.tar.gz
 docker run -it --name ros-noetic --net=host \
   -v /home/wya/nav:/workspace \
-  <dockerhub_namespace>/3dnav-ros-noetic:base bash
+  3dnav-ros-noetic:base bash
 ```
 
 这里 `/home/wya/nav` 是宿主机上的项目父目录。别人复现时把它替换成自己的路径即可，例如项目位于 `/home/alice/nav/3d_nav`，就挂载：
@@ -225,10 +225,10 @@ docker run -dit --name ros-noetic-x11 --net=host \
   ros-noetic-3dnav:x11-base bash
 ```
 
-如果使用已配置好的 DockerHub X11 镜像创建：
+如果使用已配置好的 X11 镜像压缩包创建：
 
 ```bash
-docker pull <dockerhub_namespace>/3dnav-ros-noetic:x11
+docker load < docker_img/3dnav-ros-noetic-x11.tar.gz
 xhost +si:localuser:root
 docker run -dit --name ros-noetic-x11 --net=host \
   -e DISPLAY=:0 \
@@ -236,7 +236,7 @@ docker run -dit --name ros-noetic-x11 --net=host \
   -e LIBGL_ALWAYS_SOFTWARE=1 \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
   -v /home/wya/nav:/workspace \
-  <dockerhub_namespace>/3dnav-ros-noetic:x11 bash
+  3dnav-ros-noetic:x11 bash
 docker exec -it ros-noetic-x11 bash
 ```
 
@@ -270,7 +270,7 @@ QT_OK 2560 1440
 
 ### 1.2 给 Docker 补 pip 和 PyTorch
 
-`osrf/ros:noetic-desktop-full` 默认没有 `pip` 和 PyTorch；当前网络下 Ubuntu apt 源也可能不可用，所以本项目使用宿主机下载 wheel、容器内离线安装的方式。如果使用上面的 DockerHub 镜像，PyTorch 已经内置，通常不需要执行本节安装脚本。
+`osrf/ros:noetic-desktop-full` 默认没有 `pip` 和 PyTorch；当前网络下 Ubuntu apt 源也可能不可用，所以本项目使用宿主机下载 wheel、容器内离线安装的方式。如果使用上面的 `docker_img` 镜像包，PyTorch 已经内置，通常不需要执行本节安装脚本。
 
 当前机器已经准备好本地缓存：
 
@@ -796,10 +796,10 @@ RL 模式不再使用 `standing_a1_driver.py` 的 Gazebo model pose 平移，而
 
 宿主机是 Ubuntu 22.04 时，推荐用 Docker 运行 ROS1 Noetic，避免把 Ubuntu 20.04 的 ROS apt 源混入宿主机。
 
-首次拉取 ROS Noetic 镜像：
+首次使用本项目环境镜像包：
 
 ```bash
-docker pull osrf/ros:noetic-desktop-full
+docker load < docker_img/3dnav-ros-noetic-base.tar.gz
 ```
 
 创建并进入容器：
@@ -807,7 +807,7 @@ docker pull osrf/ros:noetic-desktop-full
 ```bash
 docker run -it --name ros-noetic --net=host \
   -v /home/wya/nav:/workspace \
-  osrf/ros:noetic-desktop-full bash
+  3dnav-ros-noetic:base bash
 ```
 
 如果容器已存在，直接启动并进入：
@@ -824,7 +824,7 @@ source /opt/ros/noetic/setup.bash
 cd /workspace/3d_nav
 ```
 
-首次使用时按前文“系统依赖安装”章节安装完整 apt 依赖。最少需要 `move_base`、`octomap_server`、`tf2_sensor_msgs`、`pcl_ros`、Unitree 控制器相关 ROS 包、`libgoogle-glog-dev`、`python3-opencv` 等。
+`docker_img` 镜像包已经内置 ROS / Gazebo / PyTorch 和本项目运行所需依赖。只有改用原始 `osrf/ros:noetic-desktop-full` 镜像时，才需要按前文“系统依赖安装”章节补装 apt 依赖。
 
 如果宿主机 Docker 需要权限，把上述宿主机上的 `docker ...` 命令改成 `sudo docker ...`。
 
@@ -1245,6 +1245,45 @@ pgrep -af "roslaunch|rosmaster|gzserver|gzclient|spawn_model|controller_manager|
 ```
 
 如果只看到 `pgrep` 自己这一行，说明环境已经干净。
+
+### Gazebo 里有上一次启动留下的轨迹
+
+如果 Gazebo GUI 里还能看到上一次启动留下的运动轨迹，通常不是新的机器人实体没有刷新，而是 Gazebo 的可视化历史还在：
+
+- `gzclient` 没关干净，GUI 端还保留旧的轨迹显示。
+- `gzserver` 没重启干净，world 里的 visual marker / trajectory 状态还在。
+- Unitree Gazebo 插件有 trunk trajectory 轨迹显示，旧进程没清掉时会继续显示。
+
+先在当前容器执行：
+
+```bash
+cd /workspace/3d_nav
+./scripts/cleanup_ros_gazebo.sh
+source devel/setup.bash
+```
+
+如果使用 X11 容器，也要在 `ros-noetic-x11` 里执行一次：
+
+```bash
+cd /workspace/3d_nav
+./scripts/cleanup_ros_gazebo.sh
+```
+
+最稳妥的方式是重启两个使用 host network 的容器，避免 `rosmaster`、`gzserver`、`gzclient` 互相残留：
+
+```bash
+docker restart ros-noetic ros-noetic-x11
+```
+
+然后重新进入需要使用的容器：
+
+```bash
+docker exec -it ros-noetic-x11 bash
+cd /workspace/3d_nav
+source devel/setup.bash
+```
+
+如果只是 GUI 里视觉轨迹碍眼，但没有 `entity already exists`、`new node registered with same name`、controller manager 无响应等报错，仿真本身通常仍可继续运行；如果同时出现这些报错，必须按上面方式清理运行态。
 
 ### HPHS 有 TF extrapolation 日志
 
