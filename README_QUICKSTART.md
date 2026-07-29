@@ -10,6 +10,13 @@ docker_img/3dnav-ros-noetic-base.tar.gz
 docker_img/3dnav-ros-noetic-x11.tar.gz
 ```
 
+如果本地没有 `docker_img/`，可以从百度网盘下载 Docker 镜像压缩包：
+
+```text
+链接: https://pan.baidu.com/s/1HXC63DsTsg0Vf5dRTuBoIA?pwd=fhj7
+提取码: fhj7
+```
+
 无可视化 / headless：
 
 ```bash
