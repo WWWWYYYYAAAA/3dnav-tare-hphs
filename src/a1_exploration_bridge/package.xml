@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_exploration_bridge</name>
+  <version>0.1.0</version>
+  <description>ROS1 launch and topic bridge layer for running TARE/HPHS with the 3d-navi Unitree A1 Gazebo platform.</description>
+
+  <maintainer email="todo@example.com">3d_nav Integrator</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>gazebo_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <export/>
+</package>

@@ -1,0 +1,9 @@
+build/
+devel/
+install/
+logs/
+third_party/
+src/vendor/
+*.bag
+*.pyc
+__pycache__/

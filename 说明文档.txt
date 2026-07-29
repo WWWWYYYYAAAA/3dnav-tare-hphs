@@ -1,0 +1,22 @@
+﻿TARE地址：https://github.com/caochao39/tare_planner
+HPHS地址：https://github.com/bit-lsj/HPHS
+3d-navi地址: https://gitee.com/fdsf3e2342/3d-navi
+
+需求说明：TARE和HPHS的平台是基于小车，仿真环境是gazebo; 3d-navi的平台是基于宇树狗A1，仿真环境也是gazebo。现需要将TARE和HPHS的仿真平台换成3d-navi中的宇树狗A1, 并在Building.world上run起来。(Building.world在3d-navi项目中)
+
+踩坑说明：
+TARE的官方地址只包含上层探索，仿真器的调用以及local planner导航均在 https://www.cmu-exploration.com/ 中，所以运行时，需要先启动 https://www.cmu-exploration.com/ 中的roslaunch vehicle_simulator system_garage.launch，再启动 https://github.com/caochao39/tare_planner 中的 https://github.com/caochao39/tare_planner
+
+HPHS的启动指令比较复杂，正确启动方式如下：
+第一个终端：
+source ~/XXXXX/autonomous_exploration_development_environment/devel/setup.bash --extend
+source ~/XXXXX/HPHS/devel/setup.bash --extend
+roslaunch HPHS exploration.launch
+
+第二个终端：
+cd ~/XXXXX/HPHS/src/HPHS
+python3 ./scripts/explorer.py
+
+第三个终端: 
+Cd /XXXXX/ros_octomap
+roslaunch octomap_monitor monitor.launch
