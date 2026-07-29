@@ -1,0 +1,288 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /A1 Simulation1
+        - /TARE Planner1
+      Splitter Ratio: 0.6
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Alpha: 0.5
+      Cell Size: 1
+      Color: 160; 160; 160
+      Enabled: true
+      Line Style:
+        Line Width: 0.03
+        Value: Lines
+      Name: Grid
+      Plane: XY
+      Plane Cell Count: 40
+      Reference Frame: map
+      Value: true
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/TF
+          Enabled: true
+          Frame Timeout: 15
+          Marker Scale: 0.6
+          Name: TF
+          Show Arrows: true
+          Show Axes: true
+          Show Names: false
+          Update Interval: 0
+          Value: true
+        - Class: rviz/RobotModel
+          Alpha: 1
+          Collision Enabled: false
+          Enabled: true
+          Name: A1 Robot Model
+          Robot Description: robot_description
+          TF Prefix: ""
+          Update Interval: 0
+          Value: true
+          Visual Enabled: true
+        - Class: rviz/Axes
+          Enabled: true
+          Length: 1.5
+          Name: Sensor Frame
+          Radius: 0.08
+          Reference Frame: sensor
+          Show Trail: false
+          Value: true
+        - Class: rviz/Odometry
+          Angle Tolerance: 0.1
+          Enabled: true
+          Keep: 200
+          Name: State Estimation
+          Position Tolerance: 0.1
+          Queue Size: 10
+          Shape:
+            Alpha: 1
+            Axes Length: 0.8
+            Axes Radius: 0.05
+            Color: 255; 80; 40
+            Head Length: 0.2
+            Head Radius: 0.12
+            Shaft Length: 0.6
+            Shaft Radius: 0.05
+            Value: Arrow
+          Topic: /state_estimation
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 255; 255
+          Color Transformer: AxisColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Name: Registered Scan
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 2
+          Size (m): 0.04
+          Style: Flat Squares
+          Topic: /registered_scan
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: true
+        - Alpha: 0.8
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 70; 170; 255
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Name: Terrain Map
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 2
+          Size (m): 0.06
+          Style: Flat Squares
+          Topic: /terrain_map
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
+        - Alpha: 0.7
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 220; 60
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Name: Sensor Scan
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 2
+          Size (m): 0.05
+          Style: Flat Squares
+          Topic: /sensor_scan
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
+      Enabled: true
+      Name: A1 Simulation
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /sensor_coverage_planner/tare_visualizer/exploring_subspaces
+          Name: Exploring Subspaces
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /sensor_coverage_planner/tare_visualizer/local_planning_horizon
+          Name: Local Planning Horizon
+          Queue Size: 100
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 40; 220; 255
+          Enabled: true
+          Head Diameter: 0.25
+          Head Length: 0.2
+          Length: 0.3
+          Line Style: Billboards
+          Line Width: 0.12
+          Name: TARE Global Path
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Style: None
+          Topic: /sensor_coverage_planner/global_path
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 30; 255; 80
+          Enabled: true
+          Line Style: Billboards
+          Line Width: 0.08
+          Name: Local Path
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Style: None
+          Topic: /sensor_coverage_planner/local_path
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Class: rviz/PointStamped
+          Color: 255; 60; 255
+          Enabled: true
+          History Length: 5
+          Name: Waypoint
+          Radius: 0.5
+          Topic: /way_point
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 120; 255; 120
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Name: Free Paths
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 2
+          Size (m): 0.03
+          Style: Flat Squares
+          Topic: /free_paths
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
+      Enabled: true
+      Name: TARE Planner
+  Enabled: true
+  Global Options:
+    Background Color: 20; 22; 25
+    Default Light: true
+    Fixed Frame: map
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 18
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Field of View: 0.785398
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.6
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.95
+      Target Frame: sensor
+      Yaw: 0.78
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1000
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Width: 1500
+  X: 80
+  Y: 80

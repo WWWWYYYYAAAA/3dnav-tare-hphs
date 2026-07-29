@@ -2,7 +2,10 @@ build/
 devel/
 install/
 logs/
-third_party/
+.cache/
+third_party/*
+!third_party/rl_policy/
+!third_party/rl_policy/**
 src/vendor/
 *.bag
 *.pyc

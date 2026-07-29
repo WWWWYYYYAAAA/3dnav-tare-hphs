@@ -5,8 +5,29 @@
   <arg name="paused" default="true"/>
   <arg name="headless" default="false"/>
   <arg name="debug" default="false"/>
+  <arg name="motion_mode" default="standing"/>
+  <arg name="use_standing_driver" default="true"/>
+  <arg name="stand_height" default="0.38"/>
+  <arg name="stand_cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="stand_tf_model_name" default="a1_gazebo"/>
+  <arg name="motion_max_linear" default="1.0"/>
+  <arg name="motion_max_angular" default="1.2"/>
+  <arg name="rl_policy_path" default="$(find a1_exploration_bridge)/../../third_party/rl_policy/a1/policy.pt"/>
+  <arg name="rl_cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="rl_policy_decimation" default="1"/>
+  <arg name="rl_action_scale" default="0.25"/>
+  <arg name="rl_startup_stand_time" default="1.0"/>
+  <arg name="rl_kp" default="30.0"/>
+  <arg name="rl_kd" default="1.0"/>
+  <arg name="rl_ang_vel_scale" default="0.25"/>
+  <arg name="rl_dof_pos_scale" default="1.0"/>
+  <arg name="rl_dof_vel_scale" default="0.05"/>
+  <arg name="rl_cmd_lin_x_scale" default="1.0"/>
+  <arg name="rl_cmd_lin_y_scale" default="1.0"/>
+  <arg name="rl_cmd_ang_z_scale" default="1.0"/>
 
   <env name="GAZEBO_MODEL_PATH" value="$(optenv GAZEBO_MODEL_PATH):$(find unitree_gazebo)/models"/>
+  <env name="GAZEBO_MODEL_DATABASE_URI" value=""/>
 
   <include file="$(find unitree_guide)/launch/gazeboSim.launch">
     <arg name="rname" value="$(arg rname)"/>
@@ -16,4 +37,38 @@
     <arg name="headless" value="$(arg headless)"/>
     <arg name="debug" value="$(arg debug)"/>
   </include>
+
+  <node if="$(eval arg('motion_mode') == 'standing' and arg('use_standing_driver') in [True, 'true', 'True', '1'])"
+        pkg="a1_exploration_bridge" type="standing_a1_driver.py"
+        name="standing_a1_driver" output="screen">
+    <param name="model_name" value="$(arg stand_tf_model_name)"/>
+    <param name="cmd_vel_topic" value="$(arg stand_cmd_vel_topic)"/>
+    <param name="stand_height" value="$(arg stand_height)"/>
+    <param name="max_linear" value="$(arg motion_max_linear)"/>
+    <param name="max_angular" value="$(arg motion_max_angular)"/>
+  </node>
+
+  <node if="$(eval arg('motion_mode') == 'rl')" pkg="a1_exploration_bridge" type="a1_rl_policy_driver.py"
+        name="a1_rl_policy_driver" output="screen">
+    <param name="model_name" value="$(arg stand_tf_model_name)"/>
+    <param name="policy_path" value="$(arg rl_policy_path)"/>
+    <param name="cmd_vel_topic" value="$(arg rl_cmd_vel_topic)"/>
+    <param name="max_linear" value="$(arg motion_max_linear)"/>
+    <param name="max_angular" value="$(arg motion_max_angular)"/>
+    <param name="policy_decimation" value="$(arg rl_policy_decimation)"/>
+    <param name="action_scale" value="$(arg rl_action_scale)"/>
+    <param name="startup_stand_time" value="$(arg rl_startup_stand_time)"/>
+    <param name="hip_kp" value="$(arg rl_kp)"/>
+    <param name="thigh_kp" value="$(arg rl_kp)"/>
+    <param name="calf_kp" value="$(arg rl_kp)"/>
+    <param name="hip_kd" value="$(arg rl_kd)"/>
+    <param name="thigh_kd" value="$(arg rl_kd)"/>
+    <param name="calf_kd" value="$(arg rl_kd)"/>
+    <param name="ang_vel_scale" value="$(arg rl_ang_vel_scale)"/>
+    <param name="dof_pos_scale" value="$(arg rl_dof_pos_scale)"/>
+    <param name="dof_vel_scale" value="$(arg rl_dof_vel_scale)"/>
+    <param name="cmd_lin_x_scale" value="$(arg rl_cmd_lin_x_scale)"/>
+    <param name="cmd_lin_y_scale" value="$(arg rl_cmd_lin_y_scale)"/>
+    <param name="cmd_ang_z_scale" value="$(arg rl_cmd_ang_z_scale)"/>
+  </node>
 </launch>

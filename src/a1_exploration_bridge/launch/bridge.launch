@@ -10,8 +10,11 @@
   <arg name="laserscan_out" default="/scan"/>
   <arg name="map_frame" default="map"/>
   <arg name="base_frame" default="sensor"/>
+  <arg name="robot_model_frame" default="base"/>
   <arg name="scan_frame" default=""/>
   <arg name="publish_tf" default="true"/>
+  <arg name="publish_robot_model_tf" default="true"/>
+  <arg name="tf_time_offset" default="0.02"/>
   <arg name="publish_laserscan" default="true"/>
   <arg name="transform_scan_to_map" default="true"/>
   <arg name="scan_offset_x" default="0.12"/>
@@ -26,8 +29,8 @@
   <arg name="laserscan_range_max" default="40.0"/>
   <arg name="cmd_scale_linear" default="1.0"/>
   <arg name="cmd_scale_angular" default="1.0"/>
-  <arg name="max_linear" default="0.8"/>
-  <arg name="max_angular" default="1.2"/>
+  <arg name="max_linear" default="1.0"/>
+  <arg name="max_angular" default="1.5"/>
 
   <node pkg="a1_exploration_bridge" type="cmu_a1_bridge.py" name="cmu_a1_bridge" output="screen">
     <param name="state_source" value="$(arg state_source)"/>
@@ -43,6 +46,7 @@
     <param name="base_frame" value="$(arg base_frame)"/>
     <param name="scan_frame" value="$(arg scan_frame)"/>
     <param name="publish_tf" value="$(arg publish_tf)"/>
+    <param name="tf_time_offset" value="$(arg tf_time_offset)"/>
     <param name="publish_laserscan" value="$(arg publish_laserscan)"/>
     <param name="transform_scan_to_map" value="$(arg transform_scan_to_map)"/>
     <param name="scan_offset_x" value="$(arg scan_offset_x)"/>
@@ -60,4 +64,7 @@
     <param name="max_linear" value="$(arg max_linear)"/>
     <param name="max_angular" value="$(arg max_angular)"/>
   </node>
+
+  <node if="$(arg publish_robot_model_tf)" pkg="tf2_ros" type="static_transform_publisher"
+        name="sensor_to_robot_model_tf" args="0 0 0 0 0 0 $(arg base_frame) $(arg robot_model_frame)"/>
 </launch>

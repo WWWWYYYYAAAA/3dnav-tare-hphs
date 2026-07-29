@@ -28,6 +28,7 @@ class CmuA1Bridge:
         self.base_frame = rospy.get_param("~base_frame", "sensor")
         self.scan_frame = rospy.get_param("~scan_frame", "")
         self.publish_tf = rospy.get_param("~publish_tf", True)
+        self.tf_time_offset = rospy.get_param("~tf_time_offset", 0.02)
         self.publish_laserscan = rospy.get_param("~publish_laserscan", True)
         self.transform_scan_to_map = rospy.get_param("~transform_scan_to_map", True)
         self.scan_offset_x = rospy.get_param("~scan_offset_x", 0.12)
@@ -42,8 +43,8 @@ class CmuA1Bridge:
         self.laserscan_range_max = rospy.get_param("~laserscan_range_max", 40.0)
         self.cmd_scale_linear = rospy.get_param("~cmd_scale_linear", 1.0)
         self.cmd_scale_angular = rospy.get_param("~cmd_scale_angular", 1.0)
-        self.max_linear = rospy.get_param("~max_linear", 0.8)
-        self.max_angular = rospy.get_param("~max_angular", 1.2)
+        self.max_linear = rospy.get_param("~max_linear", 1.0)
+        self.max_angular = rospy.get_param("~max_angular", 1.5)
         self.last_odom = None
         self.last_tf_stamp = None
         self.scan_fields = [
@@ -234,7 +235,7 @@ class CmuA1Bridge:
         self.last_tf_stamp = odom.header.stamp
 
         transform = TransformStamped()
-        transform.header.stamp = odom.header.stamp
+        transform.header.stamp = odom.header.stamp + rospy.Duration.from_sec(self.tf_time_offset)
         transform.header.frame_id = odom.header.frame_id or self.map_frame
         transform.child_frame_id = odom.child_frame_id or self.base_frame
         transform.transform.translation.x = odom.pose.pose.position.x

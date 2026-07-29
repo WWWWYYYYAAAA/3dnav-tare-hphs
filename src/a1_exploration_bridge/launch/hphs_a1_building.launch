@@ -9,11 +9,39 @@
   <arg name="camera_offset_z" default="0"/>
   <arg name="model_name" default="a1_gazebo"/>
   <arg name="scan_in" default="/velodyne_points"/>
+  <arg name="tf_time_offset" default="0.10"/>
+  <arg name="scan_offset_x" default="0.12"/>
+  <arg name="scan_offset_y" default="0.0"/>
+  <arg name="scan_offset_z" default="0.19"/>
+  <arg name="motion_mode" default="standing"/>
+  <arg name="use_standing_driver" default="true"/>
+  <arg name="stand_height" default="0.38"/>
+  <arg name="planner_max_speed" default="1.0"/>
+  <arg name="planner_autonomy_speed" default="1.0"/>
+  <arg name="max_linear" default="1.0"/>
+  <arg name="max_angular" default="1.5"/>
+  <arg name="rl_policy_path" default="$(find a1_exploration_bridge)/../../third_party/rl_policy/a1/policy.pt"/>
+  <arg name="rl_policy_decimation" default="1"/>
+  <arg name="rl_action_scale" default="0.25"/>
+  <arg name="rl_startup_stand_time" default="1.0"/>
+  <arg name="rl_kp" default="30.0"/>
+  <arg name="rl_kd" default="1.0"/>
 
   <include if="$(arg start_sim)" file="$(find a1_exploration_bridge)/launch/a1_building_sim.launch">
     <arg name="gui" value="$(arg gui)"/>
     <arg name="paused" value="$(arg paused)"/>
     <arg name="headless" value="$(arg headless)"/>
+    <arg name="motion_mode" value="$(arg motion_mode)"/>
+    <arg name="use_standing_driver" value="$(arg use_standing_driver)"/>
+    <arg name="stand_height" value="$(arg stand_height)"/>
+    <arg name="motion_max_linear" value="$(arg max_linear)"/>
+    <arg name="motion_max_angular" value="$(arg max_angular)"/>
+    <arg name="rl_policy_path" value="$(arg rl_policy_path)"/>
+    <arg name="rl_policy_decimation" value="$(arg rl_policy_decimation)"/>
+    <arg name="rl_action_scale" value="$(arg rl_action_scale)"/>
+    <arg name="rl_startup_stand_time" value="$(arg rl_startup_stand_time)"/>
+    <arg name="rl_kp" value="$(arg rl_kp)"/>
+    <arg name="rl_kd" value="$(arg rl_kd)"/>
   </include>
 
   <include file="$(find a1_exploration_bridge)/launch/bridge.launch">
@@ -21,6 +49,12 @@
     <arg name="scan_in" value="$(arg scan_in)"/>
     <arg name="cmd_in" value="/cmu_cmd_vel"/>
     <arg name="cmd_out" value="/cmd_vel"/>
+    <arg name="tf_time_offset" value="$(arg tf_time_offset)"/>
+    <arg name="scan_offset_x" value="$(arg scan_offset_x)"/>
+    <arg name="scan_offset_y" value="$(arg scan_offset_y)"/>
+    <arg name="scan_offset_z" value="$(arg scan_offset_z)"/>
+    <arg name="max_linear" value="$(arg max_linear)"/>
+    <arg name="max_angular" value="$(arg max_angular)"/>
   </include>
 
   <group>
@@ -29,6 +63,8 @@
       <arg name="cameraOffsetZ" value="$(arg camera_offset_z)"/>
       <arg name="goalX" value="$(arg vehicle_x)"/>
       <arg name="goalY" value="$(arg vehicle_y)"/>
+      <arg name="maxSpeed" value="$(arg planner_max_speed)"/>
+      <arg name="autonomySpeed" value="$(arg planner_autonomy_speed)"/>
     </include>
   </group>
 
