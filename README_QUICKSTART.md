@@ -109,7 +109,7 @@ TARE + RL policy + 无可视化：
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt
 ```
 
 TARE + RL policy + 有可视化：
@@ -118,7 +118,7 @@ TARE + RL policy + 有可视化：
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=true headless:=false paused:=false rviz:=true \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt
 ```
 
 ## 3. HPHS 启动
@@ -149,7 +149,7 @@ HPHS + RL policy + 无可视化：
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt \
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt \
   tf_time_offset:=0.10
 ```
 
@@ -159,7 +159,7 @@ HPHS + RL policy + 有可视化：
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=true headless:=false paused:=false rviz:=true \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt \
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt \
   tf_time_offset:=0.10
 ```
 
@@ -168,8 +168,8 @@ roslaunch a1_exploration_bridge hphs_a1_building.launch \
 运动模式：
 
 ```text
-motion_mode:=standing  固定站姿移动，不需要 policy / PyTorch，默认最稳定
-motion_mode:=rl        TorchScript policy 驱动，依赖 PyTorch
+motion_mode:=rl        TorchScript policy 驱动，默认模式，依赖 PyTorch
+motion_mode:=standing  固定站姿移动，不需要 policy / PyTorch，用于调试回退
 ```
 
 速度限制：
@@ -181,6 +181,28 @@ max_linear:=1.0              cmu_a1_bridge 输出 /cmd_vel 线速度限幅，m/s
 max_angular:=1.5             cmu_a1_bridge 输出 /cmd_vel 角速度限幅，rad/s
 ```
 
+A1 启动安全：
+
+```text
+spawn_z:=0.30                   A1 趴姿初始机身高度
+spawn_joint_args:=...           spawn_model 初始 12 关节趴姿，默认已填好
+rl_startup_damping_time:=5.0    初始 0 力矩 5 秒
+rl_startup_damping_kp:=0.0      0 力矩阶段 Kp
+rl_startup_damping_kd:=0.0      0 力矩阶段 Kd
+rl_startup_prone_kp:=80.0       归位标准趴姿阶段 Kp
+rl_startup_prone_kd:=1.0        归位标准趴姿阶段 Kd
+rl_startup_prone_rate:=1.0      归位标准趴姿关节目标变化率限幅，rad/s
+rl_startup_stand_kp:=80.0       慢站阶段 Kp
+rl_startup_stand_kd:=1.0        慢站阶段 Kd
+rl_startup_stand_rate:=0.75      慢站阶段关节目标变化率限幅，rad/s
+startup_wait_for_policy:=true   bridge 等 RL driver 进入 policy
+startup_cmd_hold_time:=2.0      policy active 后再保持 2 秒零速度
+startup_cmd_ramp_time:=2.0      再用 2 秒把 planner 速度平滑放开
+command_timeout:=0.5            planner 停止发布后 bridge 持续输出零速度
+cmd_publish_rate:=20.0          bridge 定时发布 /cmd_vel，探索结束后也保持 RL 静止命令
+head_mode:=none                 无头模式；改成 velocity 后使用速度方向 yaw PD
+```
+
 示例：
 
 ```bash
@@ -190,7 +212,8 @@ roslaunch a1_exploration_bridge tare_a1_building.launch \
   planner_max_speed:=1.0 \
   planner_autonomy_speed:=1.0 \
   max_linear:=1.0 \
-  max_angular:=1.5
+  max_angular:=1.5 \
+  head_mode:=velocity
 ```
 
 ## 5. 运行检查
@@ -214,8 +237,8 @@ RL policy 检查：
 ```bash
 python3 - <<'PY'
 import torch
-m = torch.jit.load("third_party/rl_policy/a1/policy.pt", map_location="cpu")
-y = m(torch.zeros(1, 45))
+m = torch.jit.load("third_party/rl_policy/a1/policy_act_inference_stair.pt", map_location="cpu")
+y = m.act_inference(torch.zeros(1, 225))
 print("POLICY_OK", tuple(y.shape))
 PY
 ```

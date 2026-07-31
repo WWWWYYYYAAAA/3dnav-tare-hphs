@@ -1,0 +1,93 @@
+<launch>
+    <!-- 定义地图名称，默认为 Building (建筑环境) -->
+    <arg name="world_name" default="$(find unitree_gazebo)/worlds/Building.world" />
+    <!-- 定义机器狗型号，默认为 a1 -->
+    <arg name="rname" default="a1"/>
+    <!-- 动态拼接机器狗描述包的路径 -->
+    <arg name="robot_path" value="(find $(arg rname)_description)"/>
+    <!-- 一个小技巧：定义美元符号变量，用于后续规避 xacro 命令解析时的语法冲突 -->
+    <arg name="dollar" value="$"/>
+    <arg name="x" default="-5"/>
+    <arg name="y" default="7"/>
+    <arg name="z" default="0.6"/>
+
+    <!-- paused="true"意味着刚打开仿真时物理引擎是暂停的 (防止没准备好狗就摔倒) -->
+    <!-- [关键差异] 四足机器人特有设置：刚加载时必须暂停物理引擎 -->
+    <arg name="paused" default="true"/>
+    <arg name="use_sim_time" default="true"/>   <!-- 开启仿真时钟 -->
+    <arg name="gui" default="true"/>    <!-- 开启 Gazebo 3D 界面 -->
+    <arg name="headless" default="false"/>    <!-- 传递无界面模式参数 -->
+    <arg name="debug" default="false"/>    <!-- 禁用调试模式 -->
+    
+    <!-- 用户自定义调试模式，开启后通常会将机器狗悬挂在半空中，方便调试步态而不必担心摔倒 -->
+    <arg name="user_debug" default="false"/>
+    
+    <!-- 启动 Gazebo 的 empty_world 节点，并加载 Unitree 提供的 Building 场景 -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(arg world_name)"/>
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="paused" value="$(arg paused)"/>    <!-- 传入 paused 参数，让世界处于时间静止状态 -->
+        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+        <arg name="headless" value="$(arg headless)"/>
+    </include>
+
+    <!-- 使用 xacro 工具将 .xacro 模型文件编译为纯 XML (URDF) 格式，存入 robot_description -->
+    <param name="robot_description"
+           command="$(find xacro)/xacro --inorder '$(arg dollar)$(arg robot_path)/xacro/robot.xacro' 
+           DEBUG:=$(arg user_debug)"/>
+
+    <!-- 运行 spawn_model 节点，将狗放入世界 -->
+    <!-- 配合前面的 paused = true, 这里的 -unpause 取消时间静止，使重力生效 -->
+    <!-- args 里的参数指定了机器狗在世界系中的生成位置：x=0, y=0, z=1.5; 该坐标是在 Gazebo 世界坐标系下的绝对坐标，不同于 map 和 odom -->
+    <node pkg="gazebo_ros" type="spawn_model" name="urdf_spawner" respawn="false" output="screen"
+              args="-urdf -x $(arg x) -y $(arg y) -z $(arg z) -R 0 -P 0 -Y 3.14 -model $(arg rname)_gazebo -param robot_description -unpause"/>
+
+    <!-- 读取 Gazebo 底层真实的物理坐标发布里程计 (用于在仿真中提供SLAM的功能) -->
+    <node pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" output="screen">
+        <param name="robot_name" value="$(arg rname)" />
+    </node>
+        
+    <!-- 加载包含 PID 控制参数的 YAML 配置文件 -->
+    <rosparam file="$(arg dollar)$(arg robot_path)/config/robot_control.yaml" command="load"/>
+
+    <!-- 启动控制器管理器，为狗的 4 条腿 × 每条腿 3 个关节 = 12 个电机分配独立的闭环控制节点 -->
+    <node pkg="controller_manager" type="spawner" name="controller_spawner" respawn="false"
+           ns="/$(arg rname)_gazebo" args="joint_state_controller
+          FL_hip_controller FL_thigh_controller FL_calf_controller
+          FR_hip_controller FR_thigh_controller FR_calf_controller
+          RL_hip_controller RL_thigh_controller RL_calf_controller
+          RR_hip_controller RR_thigh_controller RR_calf_controller "/>
+
+    <!-- 实时读取这 12 个电机的当前旋转角度，结合 robot.xacro 中的连杆长度，自动推算出所有零件在空间里的相对位置，并发布到 TF 树上 -->
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher"
+          respawn="false" output="screen">
+        <remap from="/joint_states" to="/$(arg rname)_gazebo/joint_states"/>
+    </node>
+    
+    <!-- 启动 虚拟joy 节点 -->
+    <!-- <node name="virtual_joy" pkg="unitree_guide" type="virtual_joy.py" output="screen"/> -->
+
+    <!-- 启动 joy 节点 -->
+    <node name="joy_node" pkg="joy" type="joy_node" output="screen">
+        <!-- 设置参数，如手柄的设备路径，通常是 /dev/input/js0 -->
+        <param name="dev" value="/dev/input/js0" />
+        <!-- 设置 0.05 的摇杆死区防止误触 -->
+        <param name="deadzone" value="0.05" />
+        <!-- 设置 20Hz 的频率发布按键和摇杆数据 -->
+        <param name="autorepeat_rate" value="20" />
+    </node>
+
+    <!-- 设置控制节点 -->
+    <include file="$(find unitree_controller)/launch/set_ctrl.launch">
+        <arg name="rname" value="$(arg rname)"/>
+    </include>
+
+    <!-- launch 文件 -->
+    <!-- 如果是仿真环境，启动坐标系转换节点 -->
+    <node pkg="unitree_guide" type="pointcloud2livox.py" name="pointcloud2livox" output="screen">
+        <param name="laser_blind" value="0.2" />
+        <param name="min_angle" value="-7"/>
+        <param name="max_angle" value="55"/>
+    </node>
+</launch>

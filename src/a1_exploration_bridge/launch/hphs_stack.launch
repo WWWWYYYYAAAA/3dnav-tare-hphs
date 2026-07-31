@@ -1,0 +1,24 @@
+<launch>
+  <arg name="vehicle_x" default="0"/>
+  <arg name="vehicle_y" default="0"/>
+  <arg name="camera_offset_z" default="0"/>
+  <arg name="planner_max_speed" default="1.0"/>
+  <arg name="planner_autonomy_speed" default="1.0"/>
+
+  <group>
+    <remap from="/cmd_vel" to="/cmu_cmd_vel"/>
+    <include file="$(find local_planner)/launch/local_planner.launch">
+      <arg name="cameraOffsetZ" value="$(arg camera_offset_z)"/>
+      <arg name="goalX" value="$(arg vehicle_x)"/>
+      <arg name="goalY" value="$(arg vehicle_y)"/>
+      <arg name="maxSpeed" value="$(arg planner_max_speed)"/>
+      <arg name="autonomySpeed" value="$(arg planner_autonomy_speed)"/>
+    </include>
+  </group>
+
+  <include file="$(find terrain_analysis)/launch/terrain_analysis.launch"/>
+  <include file="$(find sensor_scan_generation)/launch/sensor_scan_generation.launch"/>
+  <include file="$(find HPHS)/launch/octomap_server.launch"/>
+  <include file="$(find HPHS)/launch/move_base.launch"/>
+  <node pkg="HPHS" type="explorer.py" name="hphs_explorer" output="screen"/>
+</launch>

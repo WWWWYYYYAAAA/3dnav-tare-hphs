@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   rospy
   sensor_msgs
+  std_msgs
   tf2_ros
   unitree_legged_msgs
 )
@@ -16,6 +17,7 @@ catkin_package()
 catkin_install_python(PROGRAMS
   scripts/a1_rl_policy_driver.py
   scripts/cmu_a1_bridge.py
+  scripts/delayed_roslaunch.py
   scripts/standing_a1_driver.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
@@ -25,5 +27,9 @@ install(DIRECTORY launch
 )
 
 install(DIRECTORY rviz
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(DIRECTORY config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

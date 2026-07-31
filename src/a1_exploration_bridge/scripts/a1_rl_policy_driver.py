@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""A1 Gazebo RL policy driver for TorchScript policies."""
+"""A1 Gazebo RL policy driver for the Unitree guide stair policy."""
 
 import math
 import os
 
 import rospy
+from gazebo_msgs.msg import LinkStates
 from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
 from unitree_legged_msgs.msg import MotorCmd
 
 
+# Policy order used by unitree_guide State_RL_test:
+# FL, FR, RL, RR, each as hip/thigh/calf.
 JOINT_ORDER = [
     "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
     "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
@@ -18,81 +22,141 @@ JOINT_ORDER = [
     "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
 ]
 
-DEFAULT_JOINT_ANGLES = {
-    "FL_hip_joint": 0.0,
-    "RL_hip_joint": 0.0,
-    "FR_hip_joint": -0.0,
-    "RR_hip_joint": -0.0,
-    "FL_thigh_joint": 0.75,
-    "RL_thigh_joint": 0.75,
-    "FR_thigh_joint": 0.75,
-    "RR_thigh_joint": 0.75,
-    "FL_calf_joint": -1.5,
-    "RL_calf_joint": -1.5,
-    "FR_calf_joint": -1.5,
-    "RR_calf_joint": -1.5,
-}
+DEFAULT_Q = [
+    -0.15, 0.55, -1.5,
+    0.15, 0.55, -1.5,
+    -0.15, 0.70, -1.5,
+    0.15, 0.70, -1.5,
+]
+
+PRONE_Q = [
+    0.0, 1.3, -2.4,
+    0.0, 1.3, -2.4,
+    0.0, 1.3, -2.4,
+    0.0, 1.3, -2.4,
+]
+
+OBS_DIM = 45
+ACTION_DIM = 12
+HISTORY_LEN = 5
 
 
 class A1RlPolicyDriver:
     def __init__(self):
         self.model_name = rospy.get_param("~model_name", "a1_gazebo")
-        self.policy_path = os.path.expanduser(rospy.get_param("~policy_path", ""))
+        self.link_name = rospy.get_param("~link_name", "%s::base" % self.model_name)
+        self.policy_path = os.path.expanduser(
+            rospy.get_param("~policy_path", self._default_policy_path())
+        )
+        self.policy_method = rospy.get_param("~policy_method", "act_inference")
         self.cmd_vel_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
         self.joint_state_topic = rospy.get_param("~joint_state_topic", "/a1_gazebo/joint_states")
         self.joint_command_ns = rospy.get_param("~joint_command_ns", "/a1_gazebo")
         self.rate_hz = rospy.get_param("~rate", 50.0)
         self.policy_decimation = max(1, int(rospy.get_param("~policy_decimation", 1)))
         self.command_timeout = rospy.get_param("~command_timeout", 0.5)
-        self.startup_stand_time = rospy.get_param("~startup_stand_time", 1.0)
+        self.startup_damping_time = rospy.get_param("~startup_damping_time", 5.0)
+        self.startup_damping_kp = rospy.get_param("~startup_damping_kp", 0.0)
+        self.startup_damping_kd = rospy.get_param("~startup_damping_kd", 0.0)
+        self.startup_prone_kp = rospy.get_param("~startup_prone_kp", 80.0)
+        self.startup_prone_kd = rospy.get_param("~startup_prone_kd", 1.0)
+        self.startup_prone_rate = rospy.get_param("~startup_prone_rate", 1.0)
+        self.startup_prone_min_time = rospy.get_param("~startup_prone_min_time", 2.0)
+        self.startup_prone_settle_time = rospy.get_param("~startup_prone_settle_time", 0.5)
+        self.startup_prone_pos_tolerance = rospy.get_param("~startup_prone_pos_tolerance", 0.10)
+        self.startup_prone_vel_tolerance = rospy.get_param("~startup_prone_vel_tolerance", 0.35)
+        self.startup_stand_kp = rospy.get_param("~startup_stand_kp", 80.0)
+        self.startup_stand_kd = rospy.get_param("~startup_stand_kd", 1.0)
+        self.startup_stand_rate = rospy.get_param("~startup_stand_rate", 0.75)
+        self.startup_stand_min_time = rospy.get_param(
+            "~startup_stand_min_time",
+            rospy.get_param("~startup_stand_time", 5.0),
+        )
+        self.startup_stand_max_time = rospy.get_param("~startup_stand_max_time", 8.0)
+        self.startup_stand_settle_time = rospy.get_param("~startup_stand_settle_time", 1.0)
+        self.startup_stand_pos_tolerance = rospy.get_param("~startup_stand_pos_tolerance", 0.12)
+        self.startup_stand_vel_tolerance = rospy.get_param("~startup_stand_vel_tolerance", 0.35)
+        self.startup_base_ang_vel_tolerance = rospy.get_param("~startup_base_ang_vel_tolerance", 0.6)
+        self.policy_active_topic = rospy.get_param(
+            "~policy_active_topic",
+            "/a1_rl_policy_driver/policy_active",
+        )
         self.action_scale = rospy.get_param("~action_scale", 0.25)
         self.max_action = rospy.get_param("~max_action", 1.0)
         self.max_linear = rospy.get_param("~max_linear", 1.0)
-        self.max_angular = rospy.get_param("~max_angular", 1.2)
+        self.max_angular = rospy.get_param("~max_angular", 1.0)
 
         self.ang_vel_scale = rospy.get_param("~ang_vel_scale", 0.25)
         self.dof_pos_scale = rospy.get_param("~dof_pos_scale", 1.0)
         self.dof_vel_scale = rospy.get_param("~dof_vel_scale", 0.05)
-        self.cmd_lin_x_scale = rospy.get_param("~cmd_lin_x_scale", 1.0)
-        self.cmd_lin_y_scale = rospy.get_param("~cmd_lin_y_scale", 1.0)
-        self.cmd_ang_z_scale = rospy.get_param("~cmd_ang_z_scale", 1.0)
+        self.cmd_lin_x_scale = rospy.get_param("~cmd_lin_x_scale", 2.0)
+        self.cmd_lin_y_scale = rospy.get_param("~cmd_lin_y_scale", 2.0)
+        self.cmd_ang_z_scale = rospy.get_param("~cmd_ang_z_scale", 0.25)
 
-        self.hip_kp = rospy.get_param("~hip_kp", 30.0)
+        self.hip_kp = rospy.get_param("~hip_kp", 80.0)
         self.hip_kd = rospy.get_param("~hip_kd", 1.0)
-        self.thigh_kp = rospy.get_param("~thigh_kp", 30.0)
+        self.thigh_kp = rospy.get_param("~thigh_kp", 80.0)
         self.thigh_kd = rospy.get_param("~thigh_kd", 1.0)
-        self.calf_kp = rospy.get_param("~calf_kp", 30.0)
+        self.calf_kp = rospy.get_param("~calf_kp", 80.0)
         self.calf_kd = rospy.get_param("~calf_kd", 1.0)
 
-        self.default_q = [DEFAULT_JOINT_ANGLES[name] for name in JOINT_ORDER]
+        self.default_q = list(DEFAULT_Q)
+        self.prone_q = list(PRONE_Q)
         self.latest_cmd = Twist()
         self.last_cmd_time = rospy.Time(0)
         self.joint_pos = None
         self.joint_vel = None
         self.base_quat = None
         self.base_ang_vel_world = None
-        self.last_action = [0.0] * len(JOINT_ORDER)
+        self.last_link_state_time = rospy.Time(0)
+        self.obs_history = []
+        self.last_action = [0.0] * ACTION_DIM
         self.last_targets = list(self.default_q)
         self.control_tick = 0
-        self.start_time = rospy.Time.now()
+        self.state_ready_time = None
+        self.startup_prone_start_time = None
+        self.startup_prone_step_time = None
+        self.startup_prone_settle_start_time = None
+        self.startup_prone_done = False
+        self.startup_stand_start_time = None
+        self.startup_stand_step_time = None
+        self.startup_stand_settle_start_time = None
+        self.startup_stand_done = False
+        self.policy_active = False
 
         self.torch = self._load_torch()
         self.policy = self._load_policy()
 
+        self.policy_active_pub = rospy.Publisher(self.policy_active_topic, Bool, queue_size=1, latch=True)
         self.joint_publishers = {}
         for joint_name in JOINT_ORDER:
             leg, joint = self._split_joint_name(joint_name)
             topic = "%s/%s_%s_controller/command" % (self.joint_command_ns, leg, joint)
             self.joint_publishers[joint_name] = rospy.Publisher(topic, MotorCmd, queue_size=1)
+        self._publish_policy_active(False)
 
         rospy.Subscriber(self.cmd_vel_topic, Twist, self._cmd_vel_cb, queue_size=10)
         rospy.Subscriber(self.joint_state_topic, JointState, self._joint_state_cb, queue_size=10)
+        rospy.Subscriber("/gazebo/link_states", LinkStates, self._link_states_cb, queue_size=10)
         rospy.Subscriber("/gazebo/model_states", ModelStates, self._model_states_cb, queue_size=10)
 
         period = 1.0 / max(1.0, self.rate_hz)
         self.timer = rospy.Timer(rospy.Duration.from_sec(period), self._timer_cb)
         rospy.loginfo("A1 RL policy driver active: %s", self.policy_path)
+        rospy.loginfo("A1 RL policy method: %s, history: %dx%d", self.policy_method, HISTORY_LEN, OBS_DIM)
         rospy.loginfo("A1 RL joint/action order: %s", ", ".join(JOINT_ORDER))
+
+    @staticmethod
+    def _default_policy_path():
+        package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        workspace_dir = os.path.dirname(os.path.dirname(package_dir))
+        return os.path.join(
+            workspace_dir,
+            "third_party",
+            "rl_policy",
+            "a1",
+            "policy_act_inference_stair.pt",
+        )
 
     @staticmethod
     def _load_torch():
@@ -113,12 +177,22 @@ class A1RlPolicyDriver:
 
         policy = self.torch.jit.load(self.policy_path, map_location="cpu")
         policy.eval()
-        with self.torch.no_grad():
-            test_action = policy(self.torch.zeros(1, 45, dtype=self.torch.float32))
-        if tuple(test_action.shape) != (1, 12):
+        methods = list(policy._c._method_names())
+        if self.policy_method not in methods:
             raise rospy.ROSException(
-                "Expected policy input/output shape 45 -> 12, got output %s" %
-                (tuple(test_action.shape),)
+                "Policy %s does not expose method %s. Available methods: %s" %
+                (self.policy_path, self.policy_method, ", ".join(methods))
+            )
+        inference = getattr(policy, self.policy_method)
+        with self.torch.no_grad():
+            test_action = inference(
+                self.torch.zeros(1, HISTORY_LEN * OBS_DIM, dtype=self.torch.float32)
+            )
+        if test_action.numel() != ACTION_DIM:
+            raise rospy.ROSException(
+                "Expected policy input/output shape %d -> %d via %s, got output %s" %
+                (HISTORY_LEN * OBS_DIM, ACTION_DIM, self.policy_method,
+                 tuple(test_action.shape))
             )
         return policy
 
@@ -140,33 +214,245 @@ class A1RlPolicyDriver:
             index = msg.name.index(self.model_name)
         except ValueError:
             return
+        now = rospy.Time.now()
+        if self.last_link_state_time != rospy.Time(0) and (now - self.last_link_state_time).to_sec() <= 0.5:
+            return
         self.base_quat = msg.pose[index].orientation
         self.base_ang_vel_world = msg.twist[index].angular
 
-    def _timer_cb(self, _event):
-        if self._in_startup_stand() or not self._state_ready():
-            self.last_targets = list(self.default_q)
-            self._publish_targets(self.last_targets)
+    def _link_states_cb(self, msg):
+        try:
+            index = msg.name.index(self.link_name)
+        except ValueError:
             return
+        self.base_quat = msg.pose[index].orientation
+        self.base_ang_vel_world = msg.twist[index].angular
+        self.last_link_state_time = rospy.Time.now()
+
+    def _timer_cb(self, _event):
+        if not self._state_ready():
+            self._publish_policy_active(False)
+            self._publish_damping()
+            return
+
+        if self.state_ready_time is None:
+            self.state_ready_time = rospy.Time.now()
+            self.obs_history = []
+            self.startup_prone_start_time = None
+            self.startup_prone_step_time = None
+            self.startup_prone_settle_start_time = None
+            self.startup_prone_done = False
+            self.startup_stand_start_time = None
+            self.startup_stand_step_time = None
+            self.startup_stand_settle_start_time = None
+            self.startup_stand_done = False
+
+        now = rospy.Time.now()
+        if self._in_startup_damping(now):
+            self._publish_policy_active(False)
+            self._publish_damping()
+            return
+
+        if not self._startup_prone_complete(now):
+            self._publish_policy_active(False)
+            self._publish_startup_prone(now)
+            return
+
+        if not self._startup_stand_complete(now):
+            self._publish_policy_active(False)
+            self._publish_startup_stand(now)
+            return
+
+        if not self.policy_active:
+            self.policy_active = True
+            self.obs_history = []
+            self.last_action = [0.0] * ACTION_DIM
+            self.last_targets = list(self.default_q)
+            self.control_tick = 0
+            rospy.loginfo("A1 startup stand settled; entering RL policy")
+        self._publish_policy_active(True)
 
         if self.control_tick % self.policy_decimation == 0:
             obs = self._build_observation()
             with self.torch.no_grad():
-                action = self.policy(obs).detach().cpu().view(-1).tolist()
+                action = getattr(self.policy, self.policy_method)(obs).detach().cpu().view(-1).tolist()
             action = [self._clamp(value, self.max_action) for value in action]
             self.last_targets = [
                 self.default_q[index] + self.action_scale * action[index]
-                for index in range(len(JOINT_ORDER))
+                for index in range(ACTION_DIM)
             ]
             self.last_action = action
 
         self.control_tick += 1
         self._publish_targets(self.last_targets)
 
-    def _in_startup_stand(self):
-        if self.startup_stand_time <= 0.0:
+    def _in_startup_damping(self, now):
+        if self.startup_damping_time <= 0.0:
             return False
-        return (rospy.Time.now() - self.start_time).to_sec() < self.startup_stand_time
+        if self.state_ready_time is None:
+            return True
+        return (now - self.state_ready_time).to_sec() < self.startup_damping_time
+
+    def _publish_damping(self):
+        targets = self.joint_pos if self.joint_pos is not None else self.default_q
+        self._publish_targets(
+            targets,
+            fixed_kp=self.startup_damping_kp,
+            fixed_kd=self.startup_damping_kd,
+        )
+
+    def _publish_startup_prone(self, now):
+        if self.startup_prone_start_time is None:
+            self.startup_prone_start_time = now
+            self.startup_prone_step_time = now
+            self.last_targets = list(self.joint_pos if self.joint_pos is not None else self.prone_q)
+            rospy.loginfo(
+                "A1 startup damping complete; moving to prone pose with Kp=%.1f Kd=%.1f rate=%.2f rad/s",
+                self.startup_prone_kp,
+                self.startup_prone_kd,
+                self.startup_prone_rate,
+            )
+
+        self.last_targets = self._step_targets(
+            now,
+            self.startup_prone_step_time,
+            self.last_targets,
+            self.prone_q,
+            self.startup_prone_rate,
+        )
+        self.startup_prone_step_time = now
+        self._publish_targets(
+            self.last_targets,
+            fixed_kp=self.startup_prone_kp,
+            fixed_kd=self.startup_prone_kd,
+        )
+
+    def _publish_startup_stand(self, now):
+        if self.startup_stand_start_time is None:
+            self.startup_stand_start_time = now
+            self.startup_stand_step_time = now
+            self.last_targets = list(self.joint_pos if self.joint_pos is not None else self.prone_q)
+            rospy.loginfo(
+                "A1 startup prone pose settled; slowly standing with Kp=%.1f Kd=%.1f rate=%.2f rad/s",
+                self.startup_stand_kp,
+                self.startup_stand_kd,
+                self.startup_stand_rate,
+            )
+
+        self.last_targets = self._step_targets(
+            now,
+            self.startup_stand_step_time,
+            self.last_targets,
+            self.default_q,
+            self.startup_stand_rate,
+        )
+        self.startup_stand_step_time = now
+        self._publish_targets(
+            self.last_targets,
+            fixed_kp=self.startup_stand_kp,
+            fixed_kd=self.startup_stand_kd,
+        )
+
+    def _startup_prone_complete(self, now):
+        if self.startup_prone_done:
+            return True
+        complete, settle_start = self._startup_target_complete(
+            now,
+            self.prone_q,
+            self.startup_prone_start_time,
+            self.startup_prone_settle_start_time,
+            self.startup_prone_min_time,
+            self.startup_prone_settle_time,
+            self.startup_prone_pos_tolerance,
+            self.startup_prone_vel_tolerance,
+            "prone pose",
+        )
+        self.startup_prone_settle_start_time = settle_start
+        if complete:
+            self.startup_prone_done = True
+        return complete
+
+    def _startup_stand_complete(self, now):
+        if self.startup_stand_done:
+            return True
+        complete, settle_start = self._startup_target_complete(
+            now,
+            self.default_q,
+            self.startup_stand_start_time,
+            self.startup_stand_settle_start_time,
+            self.startup_stand_min_time,
+            self.startup_stand_settle_time,
+            self.startup_stand_pos_tolerance,
+            self.startup_stand_vel_tolerance,
+            "stand pose",
+        )
+        self.startup_stand_settle_start_time = settle_start
+        if not complete and self._startup_stand_timed_out(now):
+            rospy.logwarn(
+                "A1 startup stand reached target but did not fully settle before %.2fs; entering RL policy",
+                self.startup_stand_max_time,
+            )
+            complete = True
+        if complete:
+            self.startup_stand_done = True
+        return complete
+
+    def _startup_stand_timed_out(self, now):
+        if self.startup_stand_max_time <= 0.0 or self.startup_stand_start_time is None:
+            return False
+        elapsed = (now - self.startup_stand_start_time).to_sec()
+        if elapsed < self.startup_stand_max_time:
+            return False
+        target_error = max(abs(self.default_q[index] - self.last_targets[index]) for index in range(ACTION_DIM))
+        base_ang_speed = math.sqrt(
+            self.base_ang_vel_world.x * self.base_ang_vel_world.x +
+            self.base_ang_vel_world.y * self.base_ang_vel_world.y +
+            self.base_ang_vel_world.z * self.base_ang_vel_world.z
+        )
+        return (
+            target_error <= self.startup_stand_pos_tolerance and
+            base_ang_speed <= self.startup_base_ang_vel_tolerance
+        )
+
+    def _startup_target_complete(self, now, target, start_time, settle_start_time,
+                                 min_time, settle_time, pos_tolerance, vel_tolerance, label):
+        if start_time is None:
+            return False, None
+
+        elapsed = (now - start_time).to_sec()
+        if elapsed < min_time:
+            return False, None
+
+        target_error = max(abs(target[index] - self.last_targets[index]) for index in range(ACTION_DIM))
+        actual_error = max(abs(target[index] - self.joint_pos[index]) for index in range(ACTION_DIM))
+        joint_speed = max(abs(value) for value in self.joint_vel)
+        base_ang_speed = math.sqrt(
+            self.base_ang_vel_world.x * self.base_ang_vel_world.x +
+            self.base_ang_vel_world.y * self.base_ang_vel_world.y +
+            self.base_ang_vel_world.z * self.base_ang_vel_world.z
+        )
+
+        settled = (
+            target_error <= pos_tolerance and
+            actual_error <= pos_tolerance and
+            joint_speed <= vel_tolerance and
+            base_ang_speed <= self.startup_base_ang_vel_tolerance
+        )
+        if not settled:
+            rospy.loginfo_throttle(
+                2.0,
+                "Waiting for A1 startup %s to settle: target_err=%.3f actual_err=%.3f joint_vel=%.3f base_w=%.3f",
+                label,
+                target_error,
+                actual_error,
+                joint_speed,
+                base_ang_speed,
+            )
+            return False, None
+
+        if settle_start_time is None:
+            return False, now
+        return (now - settle_start_time).to_sec() >= settle_time, settle_start_time
 
     def _state_ready(self):
         ready = self.joint_pos is not None and self.joint_vel is not None
@@ -200,7 +486,19 @@ class A1RlPolicyDriver:
             joint_vel +
             self.last_action
         )
-        return self.torch.tensor(obs, dtype=self.torch.float32).unsqueeze(0)
+        if len(obs) != OBS_DIM:
+            raise rospy.ROSException("Internal observation has %d values, expected %d" % (len(obs), OBS_DIM))
+        self._append_observation(obs)
+        return self.torch.tensor(
+            [value for history_obs in self.obs_history for value in history_obs],
+            dtype=self.torch.float32,
+        ).unsqueeze(0)
+
+    def _append_observation(self, obs):
+        if not self.obs_history:
+            self.obs_history = [list(obs) for _ in range(HISTORY_LEN)]
+            return
+        self.obs_history = self.obs_history[-(HISTORY_LEN - 1):] + [list(obs)]
 
     def _active_cmd(self, now):
         if self.last_cmd_time == rospy.Time(0):
@@ -209,10 +507,16 @@ class A1RlPolicyDriver:
             return Twist()
         return self.latest_cmd
 
-    def _publish_targets(self, targets):
+    def _publish_policy_active(self, active):
+        self.policy_active_pub.publish(Bool(data=active))
+
+    def _publish_targets(self, targets, fixed_kp=None, fixed_kd=None):
         for index, joint_name in enumerate(JOINT_ORDER):
             leg, joint = self._split_joint_name(joint_name)
-            kp, kd = self._gains_for_joint(joint)
+            if fixed_kp is None or fixed_kd is None:
+                kp, kd = self._gains_for_joint(joint)
+            else:
+                kp, kd = fixed_kp, fixed_kd
             msg = MotorCmd()
             msg.mode = 0x0A
             msg.q = targets[index]
@@ -233,6 +537,22 @@ class A1RlPolicyDriver:
     def _split_joint_name(joint_name):
         parts = joint_name.split("_")
         return parts[0], parts[1]
+
+    @staticmethod
+    def _step_targets(now, last_step_time, current, target, rate):
+        dt = (now - last_step_time).to_sec() if last_step_time else 0.0
+        max_delta = max(0.0, rate) * max(0.0, dt)
+        return [
+            A1RlPolicyDriver._step_towards(current[index], target[index], max_delta)
+            for index in range(ACTION_DIM)
+        ]
+
+    @staticmethod
+    def _step_towards(value, target, max_delta):
+        error = target - value
+        if abs(error) <= max_delta:
+            return target
+        return value + math.copysign(max_delta, error)
 
     @staticmethod
     def _rotate_inverse(q, vector):

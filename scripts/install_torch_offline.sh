@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WHEEL_DIR="${ROOT_DIR}/.cache/torch_wheels"
 PIP_WHEEL="${WHEEL_DIR}/pip-24.3.1-py3-none-any.whl"
-POLICY_PATH="${ROOT_DIR}/third_party/rl_policy/a1/policy.pt"
+POLICY_PATH="${ROOT_DIR}/third_party/rl_policy/a1/policy_act_inference_stair.pt"
 
 if [ ! -f "${PIP_WHEEL}" ]; then
   echo "Missing pip wheel: ${PIP_WHEEL}" >&2
@@ -35,7 +35,7 @@ policy_path = "${POLICY_PATH}"
 print("TORCH_OK", torch.__version__)
 
 model = torch.jit.load(policy_path, map_location="cpu")
-output = model(torch.zeros(1, 45))
+output = model.act_inference(torch.zeros(1, 225))
 assert tuple(output.shape) == (1, 12), tuple(output.shape)
 print("POLICY_OK", tuple(output.shape))
 PY

@@ -7,7 +7,7 @@ This README is intended for agents. When answering questions about this project,
 简洁启动指南 / Concise startup guide: [README_QUICKSTART.md](README_QUICKSTART.md) (This is the **README** for humans.)
 
 # 3d_nav: TARE / HPHS on Unitree A1
-## RL policy版本暂不可用
+## RL policy 版本可用
 本工作区按照 `说明文档.txt` 的需求，把 TARE 和 HPHS 原本基于小车的 Gazebo 仿真平台，替换为 3d-navi 中的 Unitree A1，并在 `Building.world` 场景中跑通。
 
 当前已完成并验证：
@@ -33,7 +33,7 @@ This README is intended for agents. When answering questions about this project,
 | 构建工具 | `catkin_make` |
 | Python | Python 3.8，随 Noetic / Ubuntu 20.04 |
 
-当前 TARE / HPHS + A1 集成默认不需要 CUDA、libtorch、PCT-planner、ego-planner 或真实 A1 walking policy。默认运动后端是 `motion_mode:=standing`，用于稳定跑通探索链路；固定站姿模式不需要 policy，也不需要 PyTorch。如果要启用本地 TorchScript RL policy，可切换为 `motion_mode:=rl`。RL 模式需要容器内安装 PyTorch。
+当前 TARE / HPHS + A1 集成默认使用本地 TorchScript RL policy：`motion_mode:=rl`。如果只想调试雷达、地图或 planner 链路，可切换为 `motion_mode:=standing`；固定站姿模式不需要 policy，也不需要 PyTorch。RL 模式需要容器内安装 PyTorch。
 
 ## 第三方源码
 
@@ -45,10 +45,10 @@ This README is intended for agents. When answering questions about this project,
 | `third_party/HPHS` | HPHS | HPHS 探索算法、`move_base`、`octomap_server` 配置 | `git clone https://github.com/bit-lsj/HPHS.git third_party/HPHS` |
 | `third_party/autonomous_exploration_development_environment` | CMU exploration development environment | `local_planner`、`pathFollower`、`terrain_analysis`、`sensor_scan_generation`、Velodyne 仿真包等 | `git clone https://github.com/HongbiaoZ/autonomous_exploration_development_environment.git third_party/autonomous_exploration_development_environment` |
 | `third_party/unitree_ros-master` | Unitree ROS | A1 URDF、Gazebo、关节控制器、Building world | `git clone https://github.com/unitreerobotics/unitree_ros.git third_party/unitree_ros-master` |
-| `third_party/unitree_guide_upstream` | Unitree guide | `unitree_guide/launch/gazeboSim.launch` 和 `unitree_move_base` 参考 | `git clone https://github.com/unitreerobotics/unitree_guide.git third_party/unitree_guide_upstream` |
+| `third_party/unitree_guide` | Unitree guide | `unitree_guide/launch/gazeboSim.launch` 和 `unitree_move_base` | `git clone https://github.com/unitreerobotics/unitree_guide.git third_party/unitree_guide` |
 | `third_party/unitree_ros_to_real_upstream` | Unitree ROS-to-real | `unitree_legged_msgs` 消息定义 | `git clone https://github.com/unitreerobotics/unitree_ros_to_real.git third_party/unitree_ros_to_real_upstream` |
 | `third_party/3d-navi` | 3d-navi | 参考资料，不参与当前 catkin 编译 | `git clone https://gitee.com/fdsf3e2342/3d-navi.git third_party/3d-navi` |
-| `third_party/rl_policy` | 本地 TorchScript RL policy | 可选 A1 真实 policy 运动后端，默认站立模式不依赖它 | 随完整工作区分发；缺失时不影响 `motion_mode:=standing` |
+| `third_party/rl_policy` | 本地 TorchScript RL policy | 默认 A1 policy 运动后端 | 随完整工作区分发；缺失时可用 `motion_mode:=standing` 回退 |
 
 本工作区实测过的上游 commit：
 
@@ -69,14 +69,14 @@ git clone https://github.com/caochao39/tare_planner.git third_party/tare_planner
 git clone https://github.com/bit-lsj/HPHS.git third_party/HPHS
 git clone https://github.com/HongbiaoZ/autonomous_exploration_development_environment.git third_party/autonomous_exploration_development_environment
 git clone https://github.com/unitreerobotics/unitree_ros.git third_party/unitree_ros-master
-git clone https://github.com/unitreerobotics/unitree_guide.git third_party/unitree_guide_upstream
+git clone https://github.com/unitreerobotics/unitree_guide.git third_party/unitree_guide
 git clone https://github.com/unitreerobotics/unitree_ros_to_real.git third_party/unitree_ros_to_real_upstream
 git clone https://gitee.com/fdsf3e2342/3d-navi.git third_party/3d-navi
 
 git -C third_party/tare_planner checkout 4450059
 git -C third_party/HPHS checkout 62914f8
 git -C third_party/autonomous_exploration_development_environment checkout bf0cba7
-git -C third_party/unitree_guide_upstream checkout fdf4d23
+git -C third_party/unitree_guide checkout fdf4d23
 git -C third_party/unitree_ros_to_real_upstream checkout b989870
 ```
 
@@ -108,8 +108,8 @@ ln -sfn ../../third_party/unitree_ros-master/robots/a1_description src/vendor/a1
 ln -sfn ../../third_party/unitree_ros-master/unitree_controller src/vendor/unitree_controller
 ln -sfn ../../third_party/unitree_ros-master/unitree_gazebo src/vendor/unitree_gazebo
 ln -sfn ../../third_party/unitree_ros-master/unitree_legged_control src/vendor/unitree_legged_control
-ln -sfn ../../third_party/unitree_guide_upstream/unitree_guide src/vendor/unitree_guide
-ln -sfn ../../third_party/unitree_guide_upstream/unitree_move_base src/vendor/unitree_move_base
+ln -sfn ../../third_party/unitree_guide/unitree_guide src/vendor/unitree_guide
+ln -sfn ../../third_party/unitree_guide/unitree_move_base src/vendor/unitree_move_base
 ln -sfn ../../third_party/unitree_ros_to_real_upstream/unitree_legged_msgs src/vendor/unitree_legged_msgs
 ```
 
@@ -581,7 +581,7 @@ third_party/3d-navi
 third_party/unitree_ros-master
   Unitree Gazebo、A1 描述、控制器和 Building 场景。
 
-third_party/unitree_guide_upstream
+third_party/unitree_guide
   Unitree guide 和 unitree_move_base。
 
 third_party/unitree_ros_to_real_upstream
@@ -609,10 +609,43 @@ third_party/unitree_ros-master/unitree_gazebo/models/Building/model.sdf
 
 | 模式 | 参数 | 节点 | 用途 |
 | --- | --- | --- | --- |
-| 固定站姿移动 | `motion_mode:=standing` | `standing_a1_driver.py` | 默认模式，不需要 policy / PyTorch，稳定跑通 TARE / HPHS / 雷达 / 地图 / 可视化 |
-| RL policy 驱动 | `motion_mode:=rl` | `a1_rl_policy_driver.py` | 使用本地 TorchScript policy 控制 12 个关节，依赖 PyTorch |
+| 固定站姿移动 | `motion_mode:=standing` | `standing_a1_driver.py` | 调试/回退模式，不需要 policy / PyTorch |
+| RL policy 驱动 | `motion_mode:=rl` | `a1_rl_policy_driver.py` | 默认模式，使用本地 TorchScript policy 控制 12 个关节，依赖 PyTorch |
 
-默认仍是 `motion_mode:=standing`，所以原有 TARE / HPHS 运行方式不受影响。
+默认是 `motion_mode:=rl`；需要临时回退到固定站姿时显式传 `motion_mode:=standing`。固定站姿模式会按安全站姿关节生成 A1，直接启动 TARE / HPHS 探索栈，不等待 RL policy active，也不执行 0 力矩、趴姿归位或缓慢站立流程。
+
+### A1 启动安全等待
+
+TARE / HPHS 顶层 launch 默认先保护 A1 起步，再放开探索速度命令：
+
+```text
+spawn_z:=0.30
+spawn_joint_args:=标准趴姿的 12 个 -J 关节角
+rl_startup_damping_time:=5.0
+rl_startup_damping_kp:=0.0
+rl_startup_damping_kd:=0.0
+rl_startup_prone_kp:=80.0
+rl_startup_prone_kd:=1.0
+rl_startup_prone_rate:=1.0
+rl_startup_stand_kp:=80.0
+rl_startup_stand_kd:=1.0
+rl_startup_stand_rate:=0.75
+startup_wait_for_policy:=true
+startup_cmd_hold_time:=2.0
+startup_cmd_ramp_time:=2.0
+head_mode:=none
+```
+
+含义：
+
+- `spawn_model` 以标准趴姿、约 0.30 m 机身高度生成 A1：`hip=0`、`thigh=1.3`、`calf=-2.4`，RL driver 初始只发 0 力矩命令，避免高 Kp 释放弹翻。
+- RL driver 在 joint state 和 Gazebo base 状态齐全后，先进入 0 力矩模式 5 秒：`Kp=0`、`Kd=0`、`tau=0`。
+- 之后 RL driver 先用 `Kp=80`、`Kd=1` 和 `rl_startup_prone_rate` 关节目标限幅，归位到标准趴姿：`hip=0`、`thigh=1.3`、`calf=-2.4`。
+- 标准趴姿稳定后，RL driver 再用 `Kp=80`、`Kd=1` 和 `rl_startup_stand_rate` 关节目标限幅，从趴姿慢慢站到 policy 默认站姿。
+- 关节目标、实际关节、关节速度和机身角速度都满足稳定阈值后，RL driver 才发布 policy active 并进入 policy。
+- TARE / HPHS 探索栈默认等待 policy active，再额外 2 秒才启动，避免机器人初始化时探索器提前判断完成。
+- `cmu_a1_bridge` 同样等待 policy active，再额外 2 秒保持 `/cmd_vel=0`，然后用 2 秒线性斜坡恢复 TARE / HPHS 速度。
+- `head_mode:=none` 是无头模式，保持原 planner yaw；`head_mode:=velocity` 是有头模式，会用速度方向 PD 控制 yaw，让 A1 的头逐渐对准运动方向。
 
 ### 固定站姿模式
 
@@ -638,7 +671,7 @@ src/a1_exploration_bridge/scripts/standing_a1_driver.py
 默认站立高度：
 
 ```text
-stand_height:=0.34
+stand_height:=0.38
 ```
 
 这个节点在下面三个 launch 中默认开启：
@@ -649,12 +682,12 @@ a1_exploration_bridge/tare_a1_building.launch
 a1_exploration_bridge/hphs_a1_building.launch
 ```
 
-固定站姿模式只启动 `standing_a1_driver.py`，不会启动 `a1_rl_policy_driver.py`，也不会读取 `rl_policy_path`。启动 standing 时不要传 `rl_policy_path`；只有 `motion_mode:=rl` 才需要 policy 文件和 PyTorch。
+固定站姿模式只启动 `standing_a1_driver.py`，不会启动 `a1_rl_policy_driver.py`，也不会读取 `rl_policy_path`。TARE / HPHS 顶层 launch 在 `motion_mode:=standing` 时会立刻 include 对应探索栈，并把 bridge 的 `startup_wait_for_policy`、`startup_cmd_hold_time`、`startup_cmd_ramp_time` 置为关闭。启动 standing 时不要传 `rl_policy_path`；只有 `motion_mode:=rl` 才需要 policy 文件和 PyTorch。
 
 正常运行时可以显式保留：
 
 ```bash
-use_standing_driver:=true stand_height:=0.34
+use_standing_driver:=true stand_height:=0.38
 ```
 
 如果不想启动任何 A1 运动后端，可以关闭临时站立驱动：
@@ -672,13 +705,13 @@ roslaunch a1_exploration_bridge tare_a1_building.launch \
 本地 policy 文件：
 
 ```text
-third_party/rl_policy/a1/policy.pt
+third_party/rl_policy/a1/policy_act_inference_stair.pt
 ```
 
-该文件已检查为 TorchScript `Sequential` policy：
+该文件已检查为 TorchScript `act_inference` policy：
 
 ```text
-input:  45
+input:  225 = 5 history frames * 45 obs
 output: 12
 ```
 
@@ -709,30 +742,30 @@ RR_hip_joint, RR_thigh_joint, RR_calf_joint
 
 ```text
 control_type: P
-Kp: 30.0
+Kp: 80.0
 Kd: 1.0
 action_scale: 0.25
 ang_vel scale: 0.25
 dof_pos scale: 1.0
 dof_vel scale: 0.05
-command scale: [1.0, 1.0, 1.0]
+command scale: [2.0, 2.0, 0.25]
 ```
 
 默认关节角度：
 
 | 关节顺序 | 默认角 rad |
 | --- | ---: |
-| `FL_hip_joint` | `0.0` |
-| `FL_thigh_joint` | `0.75` |
+| `FL_hip_joint` | `-0.15` |
+| `FL_thigh_joint` | `0.55` |
 | `FL_calf_joint` | `-1.5` |
-| `FR_hip_joint` | `0.0` |
-| `FR_thigh_joint` | `0.75` |
+| `FR_hip_joint` | `0.15` |
+| `FR_thigh_joint` | `0.55` |
 | `FR_calf_joint` | `-1.5` |
-| `RL_hip_joint` | `0.0` |
-| `RL_thigh_joint` | `0.75` |
+| `RL_hip_joint` | `-0.15` |
+| `RL_thigh_joint` | `0.70` |
 | `RL_calf_joint` | `-1.5` |
-| `RR_hip_joint` | `0.0` |
-| `RR_thigh_joint` | `0.75` |
+| `RR_hip_joint` | `0.15` |
+| `RR_thigh_joint` | `0.70` |
 | `RR_calf_joint` | `-1.5` |
 
 ROS Noetic Docker 里默认没有 `pip` 和 PyTorch。启用 RL 前先在容器中确认：
@@ -765,9 +798,9 @@ POLICY_OK (1, 12)
 cd /workspace/3d_nav
 python3 - <<'PY'
 import torch
-p = "third_party/rl_policy/a1/policy.pt"
+p = "third_party/rl_policy/a1/policy_act_inference_stair.pt"
 m = torch.jit.load(p, map_location="cpu")
-y = m(torch.zeros(1, 45))
+y = m.act_inference(torch.zeros(1, 225))
 print("POLICY_OK", tuple(y.shape))
 PY
 ```
@@ -784,7 +817,7 @@ POLICY_OK (1, 12)
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt
 ```
 
 HPHS 同理：
@@ -793,7 +826,7 @@ HPHS 同理：
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt \
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt \
   tf_time_offset:=0.10
 ```
 
@@ -1110,8 +1143,8 @@ RL policy 文件形状检查：
 ```bash
 python3 - <<'PY'
 import torch
-m = torch.jit.load("third_party/rl_policy/a1/policy.pt", map_location="cpu")
-y = m(torch.zeros(1, 45))
+m = torch.jit.load("third_party/rl_policy/a1/policy_act_inference_stair.pt", map_location="cpu")
+y = m.act_inference(torch.zeros(1, 225))
 assert tuple(y.shape) == (1, 12), tuple(y.shape)
 print("POLICY_OK", tuple(y.shape))
 PY
@@ -1123,7 +1156,7 @@ RL 运行时检查：
 roslaunch a1_exploration_bridge a1_building_sim.launch \
   gui:=false headless:=true paused:=false rviz:=false \
   motion_mode:=rl \
-  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy.pt
+  rl_policy_path:=/workspace/3d_nav/third_party/rl_policy/a1/policy_act_inference_stair.pt
 ```
 
 另开一个终端进入同一容器：
@@ -1135,7 +1168,7 @@ rosnode list | grep a1_rl_policy_driver
 rostopic echo -n 1 /a1_gazebo/FL_thigh_controller/command
 ```
 
-正常会看到 `/a1_rl_policy_driver`，并且关节命令里有类似 `Kp: 30.0`、`Kd: 1.0`、`q: 0.75` 附近的输出。
+正常会看到 `/a1_rl_policy_driver`，并且关节命令里有类似 `Kp: 80.0`、`Kd: 1.0`、`q: 0.55` 附近的输出。
 
 包检查：
 
@@ -1328,15 +1361,18 @@ roslaunch a1_exploration_bridge hphs_a1_building.launch \
 
 ```text
 libcurl: (35) OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to fuel.ignitionrobotics.org:443
+libcurl: (35) OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to fuel.gazebosim.org:443
 ```
 
-这是 Gazebo Classic 尝试访问在线 Fuel 模型库失败。本项目使用本地 A1 和 Building 模型，不依赖在线模型库；`a1_building_sim.launch` 已设置：
+这是 Gazebo / Ignition Fuel 尝试访问在线模型库失败。本项目使用本地 A1 和 Building 模型，不依赖在线模型库；`a1_building_sim.launch` 已设置：
 
 ```text
 GAZEBO_MODEL_DATABASE_URI=""
+IGN_FUEL_CONFIG_PATH="$(find a1_exploration_bridge)/config/fuel_offline.yaml"
+GZ_FUEL_CONFIG_PATH="$(find a1_exploration_bridge)/config/fuel_offline.yaml"
 ```
 
-重新启动 launch 后该在线访问会被禁用。如果仍看到一次旧日志，通常是上一次 Gazebo 进程残留，重启容器即可：
+`Building.world` 中的 `sun` 和 `ground_plane` 也已改为内联模型，避免 `model://sun` / `model://ground_plane` 触发远程查询。重新启动 launch 后该在线访问会被禁用。如果仍看到一次旧日志，通常是上一次 Gazebo 进程残留，重启容器即可：
 
 ```bash
 docker restart ros-noetic

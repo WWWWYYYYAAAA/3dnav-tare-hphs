@@ -10,6 +10,7 @@ from geometry_msgs.msg import TransformStamped, Twist, TwistStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, PointCloud2, PointField
 import sensor_msgs.point_cloud2 as point_cloud2
+from std_msgs.msg import Bool
 import tf2_ros
 
 
@@ -45,6 +46,26 @@ class CmuA1Bridge:
         self.cmd_scale_angular = rospy.get_param("~cmd_scale_angular", 1.0)
         self.max_linear = rospy.get_param("~max_linear", 1.0)
         self.max_angular = rospy.get_param("~max_angular", 1.5)
+        self.command_timeout = rospy.get_param("~command_timeout", 0.5)
+        self.cmd_publish_rate = rospy.get_param("~cmd_publish_rate", 20.0)
+        self.startup_cmd_hold_time = rospy.get_param("~startup_cmd_hold_time", 0.0)
+        self.startup_cmd_ramp_time = rospy.get_param("~startup_cmd_ramp_time", 0.0)
+        self.startup_wait_for_policy = rospy.get_param("~startup_wait_for_policy", False)
+        self.policy_active_topic = rospy.get_param(
+            "~policy_active_topic",
+            "/a1_rl_policy_driver/policy_active",
+        )
+        self.head_mode = str(rospy.get_param("~head_mode", "none")).lower()
+        self.head_yaw_kp = rospy.get_param("~head_yaw_kp", 1.5)
+        self.head_yaw_kd = rospy.get_param("~head_yaw_kd", 0.15)
+        self.head_min_speed = rospy.get_param("~head_min_speed", 0.05)
+        self.head_max_yaw_rate = rospy.get_param("~head_max_yaw_rate", 0.0)
+        self.startup_reference_time = None
+        self.policy_active_time = None
+        self.head_target_yaw = None
+        self.head_target_direction_sign = 0
+        self.latest_cmd = Twist()
+        self.last_cmd_time = rospy.Time(0)
         self.last_odom = None
         self.last_tf_stamp = None
         self.scan_fields = [
@@ -71,12 +92,17 @@ class CmuA1Bridge:
 
         rospy.Subscriber(self.scan_in, PointCloud2, self._scan_cb, queue_size=5)
         rospy.Subscriber(self.cmd_in, TwistStamped, self._cmd_cb, queue_size=10)
+        if self.startup_wait_for_policy:
+            rospy.Subscriber(self.policy_active_topic, Bool, self._policy_active_cb, queue_size=1)
+        period = 1.0 / max(1.0, self.cmd_publish_rate)
+        self.cmd_timer = rospy.Timer(rospy.Duration.from_sec(period), self._cmd_timer_cb)
 
     def _odom_cb(self, msg):
         msg.header.frame_id = msg.header.frame_id or self.map_frame
         msg.child_frame_id = msg.child_frame_id or self.base_frame
         self.state_pub.publish(msg)
         self.last_odom = msg
+        self._mark_startup_reference()
         self._publish_tf(msg)
 
     def _model_states_cb(self, msg):
@@ -95,6 +121,7 @@ class CmuA1Bridge:
         odom.twist.twist = msg.twist[index]
         self.state_pub.publish(odom)
         self.last_odom = odom
+        self._mark_startup_reference()
         self._publish_tf(odom)
 
     def _scan_cb(self, msg):
@@ -218,14 +245,121 @@ class CmuA1Bridge:
             yield x, y, z, intensity
 
     def _cmd_cb(self, msg):
+        self.latest_cmd = self._scale_cmd(msg.twist)
+        self.last_cmd_time = rospy.Time.now()
+        self.cmd_pub.publish(self._output_cmd())
+
+    def _cmd_timer_cb(self, _event):
+        self.cmd_pub.publish(self._output_cmd())
+
+    def _policy_active_cb(self, msg):
+        if msg.data:
+            if self.policy_active_time is None:
+                self.policy_active_time = rospy.Time.now()
+                rospy.loginfo("A1 policy active; holding planner command for %.2f more seconds",
+                              self.startup_cmd_hold_time)
+        else:
+            self.policy_active_time = None
+            self._clear_head_target()
+
+    def _output_cmd(self):
         cmd = Twist()
-        cmd.linear.x = self._clamp(msg.twist.linear.x * self.cmd_scale_linear, self.max_linear)
-        cmd.linear.y = self._clamp(msg.twist.linear.y * self.cmd_scale_linear, self.max_linear)
-        cmd.linear.z = self._clamp(msg.twist.linear.z * self.cmd_scale_linear, self.max_linear)
-        cmd.angular.x = self._clamp(msg.twist.angular.x * self.cmd_scale_angular, self.max_angular)
-        cmd.angular.y = self._clamp(msg.twist.angular.y * self.cmd_scale_angular, self.max_angular)
-        cmd.angular.z = self._clamp(msg.twist.angular.z * self.cmd_scale_angular, self.max_angular)
-        self.cmd_pub.publish(cmd)
+        if self._holding_startup_cmd() or self._planner_cmd_stale():
+            self._clear_head_target()
+            return cmd
+
+        ramp = self._startup_cmd_ramp()
+        cmd.linear.x = ramp * self.latest_cmd.linear.x
+        cmd.linear.y = ramp * self.latest_cmd.linear.y
+        cmd.linear.z = ramp * self.latest_cmd.linear.z
+        cmd.angular.x = ramp * self.latest_cmd.angular.x
+        cmd.angular.y = ramp * self.latest_cmd.angular.y
+        cmd.angular.z = ramp * self.latest_cmd.angular.z
+        cmd = self._apply_head_mode(cmd)
+        return cmd
+
+    def _scale_cmd(self, twist):
+        cmd = Twist()
+        cmd.linear.x = self._clamp(twist.linear.x * self.cmd_scale_linear, self.max_linear)
+        cmd.linear.y = self._clamp(twist.linear.y * self.cmd_scale_linear, self.max_linear)
+        cmd.linear.z = self._clamp(twist.linear.z * self.cmd_scale_linear, self.max_linear)
+        cmd.angular.x = self._clamp(twist.angular.x * self.cmd_scale_angular, self.max_angular)
+        cmd.angular.y = self._clamp(twist.angular.y * self.cmd_scale_angular, self.max_angular)
+        cmd.angular.z = self._clamp(twist.angular.z * self.cmd_scale_angular, self.max_angular)
+        return cmd
+
+    def _apply_head_mode(self, cmd):
+        if self.head_mode in ("none", "off", "false", "0", ""):
+            self._clear_head_target()
+            return cmd
+        if self.head_mode not in ("velocity", "head", "headed"):
+            rospy.logwarn_throttle(5.0, "Unsupported ~head_mode '%s'; using no-head behavior", self.head_mode)
+            return cmd
+        if self.last_odom is None:
+            return cmd
+
+        speed = math.hypot(cmd.linear.x, cmd.linear.y)
+        if speed < self.head_min_speed:
+            self._clear_head_target()
+            return cmd
+
+        yaw = self._yaw_from_quaternion(self.last_odom.pose.pose.orientation)
+        cmd_heading = math.atan2(cmd.linear.y, cmd.linear.x)
+        direction_sign = 1 if math.cos(cmd_heading) >= 0.0 else -1
+        if self.head_target_yaw is None or direction_sign != self.head_target_direction_sign:
+            self.head_target_yaw = self._normalize_angle(yaw + math.atan2(cmd.linear.y, cmd.linear.x))
+            self.head_target_direction_sign = direction_sign
+
+        yaw_error = self._normalize_angle(self.head_target_yaw - yaw)
+
+        yaw_rate = self.last_odom.twist.twist.angular.z
+        max_yaw_rate = self.head_max_yaw_rate if self.head_max_yaw_rate > 0.0 else self.max_angular
+        cmd.angular.z = self._clamp(self.head_yaw_kp * yaw_error - self.head_yaw_kd * yaw_rate, max_yaw_rate)
+
+        cmd.linear.x = self._clamp(speed * math.cos(yaw_error), self.max_linear)
+        cmd.linear.y = self._clamp(speed * math.sin(yaw_error), self.max_linear)
+        return cmd
+
+    def _clear_head_target(self):
+        self.head_target_yaw = None
+        self.head_target_direction_sign = 0
+
+    def _planner_cmd_stale(self):
+        if self.last_cmd_time == rospy.Time(0):
+            return True
+        if self.command_timeout <= 0.0:
+            return False
+        return (rospy.Time.now() - self.last_cmd_time).to_sec() > self.command_timeout
+
+    def _holding_startup_cmd(self):
+        elapsed = self._startup_elapsed()
+        if elapsed is None:
+            return self.startup_wait_for_policy or self.startup_cmd_hold_time > 0.0
+        if self.startup_cmd_hold_time <= 0.0:
+            return False
+        return elapsed < self.startup_cmd_hold_time
+
+    def _startup_cmd_ramp(self):
+        if self.startup_cmd_ramp_time <= 0.0:
+            return 1.0
+        elapsed = self._startup_elapsed()
+        if elapsed is None:
+            return 0.0
+        elapsed -= self.startup_cmd_hold_time
+        return max(0.0, min(1.0, elapsed / self.startup_cmd_ramp_time))
+
+    def _startup_elapsed(self):
+        if self.startup_wait_for_policy:
+            if self.policy_active_time is None:
+                return None
+            return (rospy.Time.now() - self.policy_active_time).to_sec()
+        if self.startup_reference_time is None:
+            return None
+        return (rospy.Time.now() - self.startup_reference_time).to_sec()
+
+    def _mark_startup_reference(self):
+        if self.startup_reference_time is None:
+            self.startup_reference_time = rospy.Time.now()
 
     def _publish_tf(self, odom):
         if not self.publish_tf:
@@ -268,6 +402,15 @@ class CmuA1Bridge:
             (2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)),
             (2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)),
         )
+
+    @staticmethod
+    def _yaw_from_quaternion(q):
+        return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+    @staticmethod
+    def _normalize_angle(angle):
+        return math.atan2(math.sin(angle), math.cos(angle))
 
     @staticmethod
     def _clamp(value, limit):

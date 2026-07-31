@@ -56,7 +56,24 @@ link_dir "${THIRD_PARTY_DIR}/HPHS" "${VENDOR_DIR}/HPHS"
 
 for pkg_dir in "${THIRD_PARTY_DIR}/3d-navi/src/"*; do
   [ -d "${pkg_dir}" ] || continue
+  case "$(basename "${pkg_dir}")" in
+    unitree_guide|unitree_move_base)
+      continue
+      ;;
+  esac
   link_dir "${pkg_dir}" "${VENDOR_DIR}/$(basename "${pkg_dir}")"
 done
+
+if [ -d "${THIRD_PARTY_DIR}/unitree_guide/unitree_guide" ]; then
+  link_dir "${THIRD_PARTY_DIR}/unitree_guide/unitree_guide" "${VENDOR_DIR}/unitree_guide"
+elif [ -d "${THIRD_PARTY_DIR}/3d-navi/src/unitree_guide/unitree_guide" ]; then
+  link_dir "${THIRD_PARTY_DIR}/3d-navi/src/unitree_guide/unitree_guide" "${VENDOR_DIR}/unitree_guide"
+fi
+
+if [ -d "${THIRD_PARTY_DIR}/unitree_guide/unitree_move_base" ]; then
+  link_dir "${THIRD_PARTY_DIR}/unitree_guide/unitree_move_base" "${VENDOR_DIR}/unitree_move_base"
+elif [ -d "${THIRD_PARTY_DIR}/3d-navi/src/unitree_guide/unitree_move_base" ]; then
+  link_dir "${THIRD_PARTY_DIR}/3d-navi/src/unitree_guide/unitree_move_base" "${VENDOR_DIR}/unitree_move_base"
+fi
 
 echo "Sources are ready under ${THIRD_PARTY_DIR}; catkin package links are under ${VENDOR_DIR}."

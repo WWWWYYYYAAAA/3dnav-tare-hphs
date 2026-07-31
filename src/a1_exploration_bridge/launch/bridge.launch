@@ -30,9 +30,20 @@
   <arg name="cmd_scale_linear" default="1.0"/>
   <arg name="cmd_scale_angular" default="1.0"/>
   <arg name="max_linear" default="1.0"/>
-  <arg name="max_angular" default="1.5"/>
+  <arg name="max_angular" default="1.0"/>
+  <arg name="command_timeout" default="0.5"/>
+  <arg name="cmd_publish_rate" default="20.0"/>
+  <arg name="startup_cmd_hold_time" default="0.0"/>
+  <arg name="startup_cmd_ramp_time" default="0.0"/>
+  <arg name="startup_wait_for_policy" default="false"/>
+  <arg name="policy_active_topic" default="/a1_rl_policy_driver/policy_active"/>
+  <arg name="head_mode" default="none"/>
+  <arg name="head_yaw_kp" default="1.5"/>
+  <arg name="head_yaw_kd" default="0.15"/>
+  <arg name="head_min_speed" default="0.05"/>
+  <arg name="head_max_yaw_rate" default="1.2"/>
 
-  <node pkg="a1_exploration_bridge" type="cmu_a1_bridge.py" name="cmu_a1_bridge" output="screen">
+  <node pkg="a1_exploration_bridge" type="cmu_a1_bridge.py" name="cmu_a1_bridge" output="screen" respawn="true" respawn_delay="1.0">
     <param name="state_source" value="$(arg state_source)"/>
     <param name="model_name" value="$(arg model_name)"/>
     <param name="odom_in" value="$(arg odom_in)"/>
@@ -63,6 +74,17 @@
     <param name="cmd_scale_angular" value="$(arg cmd_scale_angular)"/>
     <param name="max_linear" value="$(arg max_linear)"/>
     <param name="max_angular" value="$(arg max_angular)"/>
+    <param name="command_timeout" value="$(arg command_timeout)"/>
+    <param name="cmd_publish_rate" value="$(arg cmd_publish_rate)"/>
+    <param name="startup_cmd_hold_time" value="$(arg startup_cmd_hold_time)"/>
+    <param name="startup_cmd_ramp_time" value="$(arg startup_cmd_ramp_time)"/>
+    <param name="startup_wait_for_policy" value="$(arg startup_wait_for_policy)"/>
+    <param name="policy_active_topic" value="$(arg policy_active_topic)"/>
+    <param name="head_mode" value="$(arg head_mode)"/>
+    <param name="head_yaw_kp" value="$(arg head_yaw_kp)"/>
+    <param name="head_yaw_kd" value="$(arg head_yaw_kd)"/>
+    <param name="head_min_speed" value="$(arg head_min_speed)"/>
+    <param name="head_max_yaw_rate" value="$(arg head_max_yaw_rate)"/>
   </node>
 
   <node if="$(arg publish_robot_model_tf)" pkg="tf2_ros" type="static_transform_publisher"

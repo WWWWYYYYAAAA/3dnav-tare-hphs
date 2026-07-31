@@ -6,6 +6,8 @@ logs/
 third_party/*
 !third_party/rl_policy/
 !third_party/rl_policy/**
+!third_party/unitree_guide/
+!third_party/unitree_guide/**
 src/vendor/
 *.bag
 *.pyc
