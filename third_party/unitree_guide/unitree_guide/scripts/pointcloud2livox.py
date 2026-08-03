@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-@brief: 将 /scan (sensor_msgs/PointCloud) 变换到 odom 坐标系后发布为 PointCloud2
+@brief: 将 Livox Gazebo 原始 PointCloud 变换到 odom 坐标系后发布为 PointCloud2
 @Editor: CJH + 修改完善版
 @Date: 2025-10-22 → 2025-11-22
 """
@@ -370,10 +370,11 @@ def main():
 
     min_angle = rospy.get_param('~min_angle', 2.5)          # 俯仰角下限
     max_angle = rospy.get_param('~max_angle', 60)           # 俯仰角上限
+    raw_scan_topic = rospy.get_param('~raw_scan_topic', '/scan')
     rospy.loginfo(f"Angle filter : {min_angle} ~ {max_angle} deg")
 
     # 订阅原始仿真点云和 gazebo 里程计 (当前时刻的base 到 odom)
-    rospy.Subscriber('/scan', PointCloud, mmw_handler, queue_size = 10)
+    rospy.Subscriber(raw_scan_topic, PointCloud, mmw_handler, queue_size = 10)
     rospy.Subscriber(ODOM_TOPIC, Odometry, odom_callback, queue_size = 10)
 
     # /livox/lidar2 发送给 SLAM (雷达坐标系下的点云)
@@ -384,6 +385,7 @@ def main():
     rospy.loginfo("=== Pointcloud2livox (published in odom) STARTED ===")
     rospy.loginfo(f"Global frame: {GLOBAL_FRAME}")
     rospy.loginfo(f"Odom topic : {ODOM_TOPIC}")
+    rospy.loginfo(f"Raw scan topic : {raw_scan_topic}")
 
     rospy.spin()
 

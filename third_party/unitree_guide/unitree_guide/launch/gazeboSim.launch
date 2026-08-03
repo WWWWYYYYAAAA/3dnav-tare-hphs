@@ -25,12 +25,17 @@
     <arg name="gui" default="true"/>    <!-- 开启 Gazebo 3D 界面 -->
     <arg name="headless" default="false"/>    <!-- 传递无界面模式参数 -->
     <arg name="debug" default="false"/>    <!-- 禁用调试模式 -->
+
+    <!-- This simulation uses only local models; never fall back to Gazebo's online database. -->
+    <env name="GAZEBO_MODEL_DATABASE_URI" value=""/>
+    <env name="GAZEBO_MODEL_PATH" value="$(find unitree_gazebo)/models:$(optenv GAZEBO_MODEL_PATH)"/>
     
     <!-- 用户自定义调试模式，开启后通常会将机器狗悬挂在半空中，方便调试步态而不必担心摔倒 -->
     <arg name="user_debug" default="false"/>
     <arg name="start_state_from_gazebo" default="false"/>
     <arg name="start_joy" default="false"/>
     <arg name="start_pointcloud2livox" default="false"/>
+    <arg name="livox_raw_scan_topic" default="/livox/raw_scan"/>
     
     <!-- 启动 Gazebo 的 empty_world 节点，并加载 Unitree 提供的 Building 场景 -->
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
@@ -96,6 +101,7 @@
     <!-- launch 文件 -->
     <!-- 如果是仿真环境，启动坐标系转换节点 -->
     <node if="$(arg start_pointcloud2livox)" pkg="unitree_guide" type="pointcloud2livox.py" name="pointcloud2livox" output="screen">
+        <param name="raw_scan_topic" value="$(arg livox_raw_scan_topic)" />
         <param name="laser_blind" value="0.2" />
         <param name="min_angle" value="-7"/>
         <param name="max_angle" value="55"/>

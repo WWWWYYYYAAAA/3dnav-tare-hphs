@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   rospy
   sensor_msgs
+  std_srvs
   std_msgs
   tf2_ros
   unitree_legged_msgs

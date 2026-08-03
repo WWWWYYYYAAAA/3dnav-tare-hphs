@@ -2,7 +2,7 @@
   <arg name="state_source" default="gazebo_model_states"/>
   <arg name="model_name" default="a1_gazebo"/>
   <arg name="odom_in" default="/odom"/>
-  <arg name="scan_in" default="/velodyne_points"/>
+  <arg name="scan_in" default="/livox/point_cloud"/>
   <arg name="cmd_in" default="/cmu_cmd_vel"/>
   <arg name="cmd_out" default="/cmd_vel"/>
   <arg name="state_estimation_out" default="/state_estimation"/>
@@ -17,15 +17,18 @@
   <arg name="tf_time_offset" default="0.02"/>
   <arg name="publish_laserscan" default="true"/>
   <arg name="transform_scan_to_map" default="true"/>
-  <arg name="scan_offset_x" default="0.12"/>
+  <arg name="scan_offset_x" default="0.25"/>
   <arg name="scan_offset_y" default="0.0"/>
-  <arg name="scan_offset_z" default="0.19"/>
+  <arg name="scan_offset_z" default="0.1"/>
+  <arg name="scan_mount_roll" default="0.0"/>
+  <arg name="scan_mount_pitch" default="0.785"/>
+  <arg name="scan_mount_yaw" default="0.0"/>
   <arg name="laserscan_min_z" default="-0.2"/>
   <arg name="laserscan_max_z" default="1.0"/>
   <arg name="laserscan_angle_min" default="-3.14159265359"/>
   <arg name="laserscan_angle_max" default="3.14159265359"/>
   <arg name="laserscan_angle_increment" default="0.01745329252"/>
-  <arg name="laserscan_range_min" default="0.3"/>
+  <arg name="laserscan_range_min" default="0.4"/>
   <arg name="laserscan_range_max" default="40.0"/>
   <arg name="cmd_scale_linear" default="1.0"/>
   <arg name="cmd_scale_angular" default="1.0"/>
@@ -63,6 +66,9 @@
     <param name="scan_offset_x" value="$(arg scan_offset_x)"/>
     <param name="scan_offset_y" value="$(arg scan_offset_y)"/>
     <param name="scan_offset_z" value="$(arg scan_offset_z)"/>
+    <param name="scan_mount_roll" value="$(arg scan_mount_roll)"/>
+    <param name="scan_mount_pitch" value="$(arg scan_mount_pitch)"/>
+    <param name="scan_mount_yaw" value="$(arg scan_mount_yaw)"/>
     <param name="laserscan_min_z" value="$(arg laserscan_min_z)"/>
     <param name="laserscan_max_z" value="$(arg laserscan_max_z)"/>
     <param name="laserscan_angle_min" value="$(arg laserscan_angle_min)"/>

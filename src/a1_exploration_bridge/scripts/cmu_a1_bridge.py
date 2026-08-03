@@ -19,7 +19,7 @@ class CmuA1Bridge:
         self.state_source = rospy.get_param("~state_source", "gazebo_model_states")
         self.model_name = rospy.get_param("~model_name", "a1_gazebo")
         self.odom_in = rospy.get_param("~odom_in", "/odom")
-        self.scan_in = rospy.get_param("~scan_in", "/velodyne_points")
+        self.scan_in = rospy.get_param("~scan_in", "/livox/point_cloud")
         self.cmd_in = rospy.get_param("~cmd_in", "/cmu_cmd_vel")
         self.cmd_out = rospy.get_param("~cmd_out", "/cmd_vel")
         self.state_out = rospy.get_param("~state_estimation_out", "/state_estimation")
@@ -32,9 +32,17 @@ class CmuA1Bridge:
         self.tf_time_offset = rospy.get_param("~tf_time_offset", 0.02)
         self.publish_laserscan = rospy.get_param("~publish_laserscan", True)
         self.transform_scan_to_map = rospy.get_param("~transform_scan_to_map", True)
-        self.scan_offset_x = rospy.get_param("~scan_offset_x", 0.12)
+        self.scan_offset_x = rospy.get_param("~scan_offset_x", 0.25)
         self.scan_offset_y = rospy.get_param("~scan_offset_y", 0.0)
-        self.scan_offset_z = rospy.get_param("~scan_offset_z", 0.19)
+        self.scan_offset_z = rospy.get_param("~scan_offset_z", 0.1)
+        self.scan_mount_roll = rospy.get_param("~scan_mount_roll", 0.0)
+        self.scan_mount_pitch = rospy.get_param("~scan_mount_pitch", 0.785)
+        self.scan_mount_yaw = rospy.get_param("~scan_mount_yaw", 0.0)
+        self.scan_mount_rotation = self._rpy_to_matrix(
+            self.scan_mount_roll,
+            self.scan_mount_pitch,
+            self.scan_mount_yaw,
+        )
         self.laserscan_min_z = rospy.get_param("~laserscan_min_z", -0.2)
         self.laserscan_max_z = rospy.get_param("~laserscan_max_z", 1.0)
         self.laserscan_angle_min = rospy.get_param("~laserscan_angle_min", -math.pi)
@@ -153,9 +161,7 @@ class CmuA1Bridge:
             if not math.isfinite(intensity):
                 intensity = 0.0
 
-            local_x = x + self.scan_offset_x
-            local_y = y + self.scan_offset_y
-            local_z = z + self.scan_offset_z
+            local_x, local_y, local_z = self._scan_to_base(x, y, z)
             map_x = origin.x + rotation[0][0] * local_x + rotation[0][1] * local_y + rotation[0][2] * local_z
             map_y = origin.y + rotation[1][0] * local_x + rotation[1][1] * local_y + rotation[1][2] * local_z
             map_z = origin.z + rotation[2][0] * local_x + rotation[2][1] * local_y + rotation[2][2] * local_z
@@ -184,9 +190,7 @@ class CmuA1Bridge:
             if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
                 continue
 
-            local_x = x + self.scan_offset_x
-            local_y = y + self.scan_offset_y
-            local_z = z + self.scan_offset_z
+            local_x, local_y, local_z = self._scan_to_base(x, y, z)
             if local_z < self.laserscan_min_z or local_z > self.laserscan_max_z:
                 continue
 
@@ -243,6 +247,14 @@ class CmuA1Bridge:
             else:
                 intensity = struct.unpack_from(endian + "f", msg.data, base + intensity_offset)[0]
             yield x, y, z, intensity
+
+    def _scan_to_base(self, x, y, z):
+        rotation = self.scan_mount_rotation
+        return (
+            rotation[0][0] * x + rotation[0][1] * y + rotation[0][2] * z + self.scan_offset_x,
+            rotation[1][0] * x + rotation[1][1] * y + rotation[1][2] * z + self.scan_offset_y,
+            rotation[2][0] * x + rotation[2][1] * y + rotation[2][2] * z + self.scan_offset_z,
+        )
 
     def _cmd_cb(self, msg):
         self.latest_cmd = self._scale_cmd(msg.twist)
@@ -377,6 +389,20 @@ class CmuA1Bridge:
         transform.transform.translation.z = odom.pose.pose.position.z
         transform.transform.rotation = odom.pose.pose.orientation
         self.tf_broadcaster.sendTransform(transform)
+
+    @staticmethod
+    def _rpy_to_matrix(roll, pitch, yaw):
+        cr = math.cos(roll)
+        sr = math.sin(roll)
+        cp = math.cos(pitch)
+        sp = math.sin(pitch)
+        cy = math.cos(yaw)
+        sy = math.sin(yaw)
+        return (
+            (cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr),
+            (sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr),
+            (-sp, cp * sr, cp * cr),
+        )
 
     @staticmethod
     def _quat_to_matrix(x, y, z, w):

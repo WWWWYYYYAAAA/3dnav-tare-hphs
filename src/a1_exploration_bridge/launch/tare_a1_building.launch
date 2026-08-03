@@ -9,8 +9,8 @@
   <arg name="safe_stand_joint_args"
        default="-J FL_hip_joint -0.15 -J FL_thigh_joint 0.55 -J FL_calf_joint -1.5 -J FR_hip_joint 0.15 -J FR_thigh_joint 0.55 -J FR_calf_joint -1.5 -J RL_hip_joint -0.15 -J RL_thigh_joint 0.70 -J RL_calf_joint -1.5 -J RR_hip_joint 0.15 -J RR_thigh_joint 0.70 -J RR_calf_joint -1.5"/>
   <arg name="spawn_joint_args" default="$(arg prone_joint_args)"/>
-  <arg name="startup_cmd_hold_time" default="2.0"/>
-  <arg name="startup_cmd_ramp_time" default="2.0"/>
+  <arg name="startup_cmd_hold_time" default="1.0"/>
+  <arg name="startup_cmd_ramp_time" default="0.0"/>
   <arg name="startup_wait_for_policy" default="true"/>
   <arg name="command_timeout" default="0.5"/>
   <arg name="cmd_publish_rate" default="20.0"/>
@@ -26,14 +26,18 @@
   <arg name="vehicle_y" default="0"/>
   <arg name="camera_offset_z" default="0"/>
   <arg name="model_name" default="a1_gazebo"/>
-  <arg name="scan_in" default="/velodyne_points"/>
+  <arg name="scan_in" default="/livox/point_cloud"/>
   <arg name="tf_time_offset" default="0.02"/>
-  <arg name="scan_offset_x" default="0.12"/>
+  <arg name="scan_offset_x" default="0.25"/>
   <arg name="scan_offset_y" default="0.0"/>
-  <arg name="scan_offset_z" default="0.19"/>
+  <arg name="scan_offset_z" default="0.1"/>
+  <arg name="scan_mount_roll" default="0.0"/>
+  <arg name="scan_mount_pitch" default="0.785"/>
+  <arg name="scan_mount_yaw" default="0.0"/>
   <arg name="motion_mode" default="rl"/>
   <arg name="use_standing_driver" default="true"/>
   <arg name="stand_height" default="0.38"/>
+  <arg name="stand_calf_q" default="-1.3"/>
   <arg name="planner_max_speed" default="1.0"/>
   <arg name="planner_autonomy_speed" default="1.0"/>
   <arg name="max_linear" default="0.75"/>
@@ -41,18 +45,22 @@
   <arg name="rl_policy_path" default="$(find a1_exploration_bridge)/../../third_party/rl_policy/a1/policy_act_inference_stair.pt"/>
   <arg name="rl_policy_method" default="act_inference"/>
   <arg name="rl_policy_active_topic" default="/a1_rl_policy_driver/policy_active"/>
+  <arg name="rl_skip_startup_poses" default="true"/>
   <arg name="rl_policy_decimation" default="1"/>
   <arg name="rl_action_scale" default="0.25"/>
-  <arg name="rl_startup_damping_time" default="5.0"/>
-  <arg name="rl_startup_damping_kp" default="0.0"/>
-  <arg name="rl_startup_damping_kd" default="0.0"/>
+  <arg name="rl_startup_prepare_time" default="5.0"/>
+  <arg name="rl_startup_prepare_kp" default="80.0"/>
+  <arg name="rl_startup_prepare_kd" default="1.0"/>
   <arg name="rl_startup_prone_kp" default="80.0"/>
   <arg name="rl_startup_prone_kd" default="1.0"/>
   <arg name="rl_startup_prone_rate" default="1.0"/>
   <arg name="rl_startup_prone_min_time" default="2.0"/>
+  <arg name="rl_startup_prone_max_time" default="8.0"/>
   <arg name="rl_startup_prone_settle_time" default="0.5"/>
   <arg name="rl_startup_prone_pos_tolerance" default="0.10"/>
   <arg name="rl_startup_prone_vel_tolerance" default="0.35"/>
+  <arg name="rl_startup_prone_contact_tolerance" default="0.35"/>
+  <arg name="rl_startup_prone_contact_vel_tolerance" default="0.75"/>
   <arg name="rl_startup_stand_kp" default="80.0"/>
   <arg name="rl_startup_stand_kd" default="1.0"/>
   <arg name="rl_startup_stand_rate" default="0.75"/>
@@ -61,6 +69,7 @@
   <arg name="rl_startup_stand_settle_time" default="1.0"/>
   <arg name="rl_startup_stand_pos_tolerance" default="0.12"/>
   <arg name="rl_startup_stand_vel_tolerance" default="0.35"/>
+  <arg name="rl_startup_stand_calf_q" default="-1.3"/>
   <arg name="rl_startup_base_ang_vel_tolerance" default="0.6"/>
   <arg name="rl_kp" default="80.0"/>
   <arg name="rl_kd" default="1.0"/>
@@ -70,28 +79,34 @@
     <arg name="paused" value="$(arg paused)"/>
     <arg name="headless" value="$(arg headless)"/>
     <arg name="spawn_z" value="$(arg spawn_z)"/>
+    <arg name="safe_stand_joint_args" value="$(arg safe_stand_joint_args)"/>
     <arg name="spawn_joint_args" value="$(eval arg('safe_stand_joint_args') if arg('motion_mode') == 'standing' else arg('spawn_joint_args'))"/>
     <arg name="stand_tf_model_name" value="$(arg model_name)"/>
     <arg name="motion_mode" value="$(arg motion_mode)"/>
     <arg name="use_standing_driver" value="$(arg use_standing_driver)"/>
     <arg name="stand_height" value="$(arg stand_height)"/>
+    <arg name="stand_calf_q" value="$(arg stand_calf_q)"/>
     <arg name="motion_max_linear" value="$(arg max_linear)"/>
     <arg name="motion_max_angular" value="$(arg max_angular)"/>
     <arg name="rl_policy_path" value="$(arg rl_policy_path)"/>
     <arg name="rl_policy_method" value="$(arg rl_policy_method)"/>
     <arg name="rl_policy_active_topic" value="$(arg rl_policy_active_topic)"/>
+    <arg name="rl_skip_startup_poses" value="$(arg rl_skip_startup_poses)"/>
     <arg name="rl_policy_decimation" value="$(arg rl_policy_decimation)"/>
     <arg name="rl_action_scale" value="$(arg rl_action_scale)"/>
-    <arg name="rl_startup_damping_time" value="$(arg rl_startup_damping_time)"/>
-    <arg name="rl_startup_damping_kp" value="$(arg rl_startup_damping_kp)"/>
-    <arg name="rl_startup_damping_kd" value="$(arg rl_startup_damping_kd)"/>
+    <arg name="rl_startup_prepare_time" value="$(arg rl_startup_prepare_time)"/>
+    <arg name="rl_startup_prepare_kp" value="$(arg rl_startup_prepare_kp)"/>
+    <arg name="rl_startup_prepare_kd" value="$(arg rl_startup_prepare_kd)"/>
     <arg name="rl_startup_prone_kp" value="$(arg rl_startup_prone_kp)"/>
     <arg name="rl_startup_prone_kd" value="$(arg rl_startup_prone_kd)"/>
     <arg name="rl_startup_prone_rate" value="$(arg rl_startup_prone_rate)"/>
     <arg name="rl_startup_prone_min_time" value="$(arg rl_startup_prone_min_time)"/>
+    <arg name="rl_startup_prone_max_time" value="$(arg rl_startup_prone_max_time)"/>
     <arg name="rl_startup_prone_settle_time" value="$(arg rl_startup_prone_settle_time)"/>
     <arg name="rl_startup_prone_pos_tolerance" value="$(arg rl_startup_prone_pos_tolerance)"/>
     <arg name="rl_startup_prone_vel_tolerance" value="$(arg rl_startup_prone_vel_tolerance)"/>
+    <arg name="rl_startup_prone_contact_tolerance" value="$(arg rl_startup_prone_contact_tolerance)"/>
+    <arg name="rl_startup_prone_contact_vel_tolerance" value="$(arg rl_startup_prone_contact_vel_tolerance)"/>
     <arg name="rl_startup_stand_kp" value="$(arg rl_startup_stand_kp)"/>
     <arg name="rl_startup_stand_kd" value="$(arg rl_startup_stand_kd)"/>
     <arg name="rl_startup_stand_rate" value="$(arg rl_startup_stand_rate)"/>
@@ -100,6 +115,7 @@
     <arg name="rl_startup_stand_settle_time" value="$(arg rl_startup_stand_settle_time)"/>
     <arg name="rl_startup_stand_pos_tolerance" value="$(arg rl_startup_stand_pos_tolerance)"/>
     <arg name="rl_startup_stand_vel_tolerance" value="$(arg rl_startup_stand_vel_tolerance)"/>
+    <arg name="rl_startup_stand_calf_q" value="$(arg rl_startup_stand_calf_q)"/>
     <arg name="rl_startup_base_ang_vel_tolerance" value="$(arg rl_startup_base_ang_vel_tolerance)"/>
     <arg name="rl_kp" value="$(arg rl_kp)"/>
     <arg name="rl_kd" value="$(arg rl_kd)"/>
@@ -114,6 +130,9 @@
     <arg name="scan_offset_x" value="$(arg scan_offset_x)"/>
     <arg name="scan_offset_y" value="$(arg scan_offset_y)"/>
     <arg name="scan_offset_z" value="$(arg scan_offset_z)"/>
+    <arg name="scan_mount_roll" value="$(arg scan_mount_roll)"/>
+    <arg name="scan_mount_pitch" value="$(arg scan_mount_pitch)"/>
+    <arg name="scan_mount_yaw" value="$(arg scan_mount_yaw)"/>
     <arg name="max_linear" value="$(arg max_linear)"/>
     <arg name="max_angular" value="$(arg max_angular)"/>
     <arg name="command_timeout" value="$(arg command_timeout)"/>

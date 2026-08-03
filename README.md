@@ -13,7 +13,7 @@ This README is intended for agents. When answering questions about this project,
 当前已完成并验证：
 
 - Unitree A1 Gazebo 仿真启动。
-- A1 机身挂载 VLP-16，发布 `/velodyne_points`。
+- A1 机身挂载 Mid360，发布 `/livox/point_cloud`。
 - 新增临时 A1 站立锁定驱动：缺少真实走路 policy 时，A1 保持固定站姿并跟随 `/cmd_vel` 在 Gazebo 中移动。
 - 新增 `a1_exploration_bridge` 桥接包，将 A1/Gazebo 数据适配到 CMU exploration / TARE / HPHS 所需话题。
 - TARE + A1 + Building 一键启动。
@@ -452,46 +452,59 @@ rostopic echo -n 1 /a1_gazebo/FL_thigh_controller/command
 
 `rosnode list` 中应包含 `/standing_a1_driver`。
 
-当前默认规划线速度已降为：
+当前默认速度限制：
 
 ```text
 planner_max_speed: 1.0 m/s
 planner_autonomy_speed: 1.0 m/s
-max_linear: 1.0 m/s
-max_angular: 1.5 rad/s
+max_linear: 0.75 m/s
+max_angular: 0.75 rad/s
 ```
 
 其中 `/cmu_cmd_vel` 是 local_planner 输出，`/cmd_vel` 是 `cmu_a1_bridge` 限幅后发给 A1 standing / RL driver 的速度命令。
 
 ### 修改速度限制
 
-速度链路分三层：
+速度链路分五层：
 
 ```text
-local_planner/pathFollower  ->  /cmu_cmd_vel
-cmu_a1_bridge               ->  /cmd_vel
-A1 standing / RL driver     ->  Gazebo A1
+TARE / HPHS 顶层 launch 参数
+  -> local_planner/pathFollower  ->  /cmu_cmd_vel
+  -> cmu_a1_bridge               ->  /cmd_vel
+  -> A1 RL / standing driver     ->  Gazebo A1
+  -> RL policy observation/action 缩放
 ```
 
-当前默认值：
+每一层的设置位置：
 
-```text
-规划线速度:       planner_max_speed:=1.0
-自主巡航线速度:   planner_autonomy_speed:=1.0
-bridge 线速度限幅: max_linear:=1.0
-bridge 角速度限幅: max_angular:=1.5
-```
+| 层级 | 参数 | 默认值 | 设置位置 | 作用 |
+| --- | --- | ---: | --- | --- |
+| 顶层入口 | `planner_max_speed` | `1.0` | [tare:L40](src/a1_exploration_bridge/launch/tare_a1_building.launch#L40)、[hphs:L38](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L38) | 传给 local planner 的最大规划线速度 |
+| 顶层入口 | `planner_autonomy_speed` | `1.0` | [tare:L41](src/a1_exploration_bridge/launch/tare_a1_building.launch#L41)、[hphs:L39](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L39) | 传给 local planner 的自主巡航线速度 |
+| 顶层入口 | `max_linear` | `0.75` | [tare:L42](src/a1_exploration_bridge/launch/tare_a1_building.launch#L42)、[hphs:L40](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L40) | 同时传给 bridge 和 A1 driver 的线速度硬限幅 |
+| 顶层入口 | `max_angular` | `0.75` | [tare:L43](src/a1_exploration_bridge/launch/tare_a1_building.launch#L43)、[hphs:L41](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L41) | 同时传给 bridge 和 A1 driver 的角速度硬限幅 |
+| planner | `maxSpeed` | 来自 `planner_max_speed` | [tare_stack:L15](src/a1_exploration_bridge/launch/tare_stack.launch#L15)、[hphs_stack:L14](src/a1_exploration_bridge/launch/hphs_stack.launch#L14)、[local_planner:L35](src/vendor/local_planner/launch/local_planner.launch#L35)、[pathFollower:L65](src/vendor/local_planner/launch/local_planner.launch#L65) | 影响 `/cmu_cmd_vel` 的规划速度上限 |
+| planner | `autonomySpeed` | 来自 `planner_autonomy_speed` | [tare_stack:L16](src/a1_exploration_bridge/launch/tare_stack.launch#L16)、[hphs_stack:L15](src/a1_exploration_bridge/launch/hphs_stack.launch#L15)、[local_planner:L48](src/vendor/local_planner/launch/local_planner.launch#L48)、[pathFollower:L83](src/vendor/local_planner/launch/local_planner.launch#L83) | 影响自主模式下 local planner 输出速度 |
+| bridge | `max_linear` | 来自顶层 `max_linear` | [bridge.launch:L35](src/a1_exploration_bridge/launch/bridge.launch#L35)、[cmu_a1_bridge.py:L55](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L55)、[限幅实现:L295](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L295) | 把 `/cmu_cmd_vel` 限幅后发布为 `/cmd_vel` |
+| bridge | `max_angular` | 来自顶层 `max_angular` | [bridge.launch:L36](src/a1_exploration_bridge/launch/bridge.launch#L36)、[cmu_a1_bridge.py:L56](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L56)、[限幅实现:L298](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L298) | 把 planner 角速度限幅后发布为 `/cmd_vel` |
+| RL driver | `motion_max_linear` / `max_linear` | 来自顶层 `max_linear` | [a1_building_sim:L19](src/a1_exploration_bridge/launch/a1_building_sim.launch#L19)、[传参:L103](src/a1_exploration_bridge/launch/a1_building_sim.launch#L103)、[driver:L91](src/a1_exploration_bridge/scripts/a1_rl_policy_driver.py#L91) | policy 观测里的 `cmd.linear.x/y` 再限幅一次 |
+| RL driver | `motion_max_angular` / `max_angular` | 来自顶层 `max_angular` | [a1_building_sim:L20](src/a1_exploration_bridge/launch/a1_building_sim.launch#L20)、[传参:L104](src/a1_exploration_bridge/launch/a1_building_sim.launch#L104)、[driver:L92](src/a1_exploration_bridge/scripts/a1_rl_policy_driver.py#L92) | policy 观测里的 `cmd.angular.z` 再限幅一次 |
+| policy 观测缩放 | `rl_cmd_lin_x_scale`、`rl_cmd_lin_y_scale`、`rl_cmd_ang_z_scale` | `2.0`、`2.0`、`0.25` | [a1_building_sim:L51](src/a1_exploration_bridge/launch/a1_building_sim.launch#L51)、[传参:L135](src/a1_exploration_bridge/launch/a1_building_sim.launch#L135) | 不是物理限速；是送入 policy observation 的 command scale |
+| policy 动作缩放 | `rl_action_scale` | `0.25` | [tare:L48](src/a1_exploration_bridge/launch/tare_a1_building.launch#L48)、[hphs:L46](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L46)、[a1_building_sim:L25](src/a1_exploration_bridge/launch/a1_building_sim.launch#L25) | 不是速度限幅；是 policy 输出 action 到关节目标角的缩放 |
+| 有头模式 | `head_max_yaw_rate` | `1.2` | [tare:L135](src/a1_exploration_bridge/launch/tare_a1_building.launch#L135)、[hphs:L133](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L133)、[bridge:L47](src/a1_exploration_bridge/launch/bridge.launch#L47)、[实现:L328](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L328) | 仅 `head_mode:=velocity` 时限制朝向控制产生的 yaw rate；默认 `head_mode:=none` 不使用 |
+
+实际硬限幅有两道：`cmu_a1_bridge.py` 先把 `/cmu_cmd_vel` 限到 `max_linear/max_angular` 后发 `/cmd_vel`；`a1_rl_policy_driver.py` 再用同一组 `max_linear/max_angular` 对 policy command observation 限幅。一般调 policy 行走速度，优先改 TARE / HPHS 顶层 launch 里的 `max_linear` 和 `max_angular`，这样 bridge 和 RL driver 会同时生效。
 
 临时修改 TARE 速度限制：
 
 ```bash
 roslaunch a1_exploration_bridge tare_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
-  motion_mode:=standing \
+  motion_mode:=rl \
   planner_max_speed:=1.0 \
   planner_autonomy_speed:=1.0 \
-  max_linear:=1.0 \
-  max_angular:=1.5
+  max_linear:=0.75 \
+  max_angular:=0.75
 ```
 
 临时修改 HPHS 速度限制：
@@ -499,29 +512,31 @@ roslaunch a1_exploration_bridge tare_a1_building.launch \
 ```bash
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
   gui:=false headless:=true paused:=false rviz:=false \
-  motion_mode:=standing \
+  motion_mode:=rl \
   planner_max_speed:=1.0 \
   planner_autonomy_speed:=1.0 \
-  max_linear:=1.0 \
-  max_angular:=1.5
+  max_linear:=0.75 \
+  max_angular:=0.75
 ```
 
 如果只单独启动 bridge，可以直接改：
 
 ```bash
 roslaunch a1_exploration_bridge bridge.launch \
-  max_linear:=1.0 \
-  max_angular:=1.5
+  max_linear:=0.75 \
+  max_angular:=0.75
 ```
 
 永久修改默认值时看这些位置：
 
-```text
-src/a1_exploration_bridge/launch/tare_a1_building.launch
-src/a1_exploration_bridge/launch/hphs_a1_building.launch
-src/a1_exploration_bridge/launch/bridge.launch
-src/a1_exploration_bridge/scripts/cmu_a1_bridge.py
-```
+- [tare_a1_building.launch:L40](src/a1_exploration_bridge/launch/tare_a1_building.launch#L40)
+- [hphs_a1_building.launch:L38](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L38)
+- [tare_stack.launch:L6](src/a1_exploration_bridge/launch/tare_stack.launch#L6)
+- [hphs_stack.launch:L5](src/a1_exploration_bridge/launch/hphs_stack.launch#L5)
+- [a1_building_sim.launch:L19](src/a1_exploration_bridge/launch/a1_building_sim.launch#L19)
+- [bridge.launch:L35](src/a1_exploration_bridge/launch/bridge.launch#L35)
+- [cmu_a1_bridge.py:L55](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L55)
+- [a1_rl_policy_driver.py:L91](src/a1_exploration_bridge/scripts/a1_rl_policy_driver.py#L91)
 
 修改 launch 参数后重新启动 launch 即可；修改 Python 脚本默认值后也只需要重启对应 ROS 节点，不需要重新 `catkin_make`。
 
@@ -620,31 +635,70 @@ TARE / HPHS 顶层 launch 默认先保护 A1 起步，再放开探索速度命�
 
 ```text
 spawn_z:=0.30
-spawn_joint_args:=标准趴姿的 12 个 -J 关节角
-rl_startup_damping_time:=5.0
-rl_startup_damping_kp:=0.0
-rl_startup_damping_kd:=0.0
+spawn_joint_args:=policy 安全站立位的 12 个 -J 关节角
+rl_skip_startup_poses:=true
+rl_startup_prepare_time:=5.0
+rl_startup_prepare_kp:=80.0
+rl_startup_prepare_kd:=1.0
 rl_startup_prone_kp:=80.0
 rl_startup_prone_kd:=1.0
 rl_startup_prone_rate:=1.0
+rl_startup_prone_min_time:=2.0
+rl_startup_prone_settle_time:=0.5
+rl_startup_prone_pos_tolerance:=0.10
+rl_startup_prone_vel_tolerance:=0.35
 rl_startup_stand_kp:=80.0
 rl_startup_stand_kd:=1.0
 rl_startup_stand_rate:=0.75
+rl_startup_stand_min_time:=5.0
+rl_startup_stand_max_time:=8.0
+rl_startup_stand_settle_time:=1.0
+rl_startup_stand_pos_tolerance:=0.12
+rl_startup_stand_vel_tolerance:=0.35
+rl_startup_base_ang_vel_tolerance:=0.6
 startup_wait_for_policy:=true
-startup_cmd_hold_time:=2.0
-startup_cmd_ramp_time:=2.0
+startup_cmd_hold_time:=1.0
+startup_cmd_ramp_time:=0.0
 head_mode:=none
 ```
 
-含义：
+这些参数的默认值在下面三个 launch 中设置并传入 `a1_rl_policy_driver.py`：
 
-- `spawn_model` 以标准趴姿、约 0.30 m 机身高度生成 A1：`hip=0`、`thigh=1.3`、`calf=-2.4`，RL driver 初始只发 0 力矩命令，避免高 Kp 释放弹翻。
-- RL driver 在 joint state 和 Gazebo base 状态齐全后，先进入 0 力矩模式 5 秒：`Kp=0`、`Kd=0`、`tau=0`。
-- 之后 RL driver 先用 `Kp=80`、`Kd=1` 和 `rl_startup_prone_rate` 关节目标限幅，归位到标准趴姿：`hip=0`、`thigh=1.3`、`calf=-2.4`。
-- 标准趴姿稳定后，RL driver 再用 `Kp=80`、`Kd=1` 和 `rl_startup_stand_rate` 关节目标限幅，从趴姿慢慢站到 policy 默认站姿。
+- TARE 顶层默认值：[tare_a1_building.launch:L49](src/a1_exploration_bridge/launch/tare_a1_building.launch#L49)
+- HPHS 顶层默认值：[hphs_a1_building.launch:L47](src/a1_exploration_bridge/launch/hphs_a1_building.launch#L47)
+- 仿真底层默认值：[a1_building_sim.launch:L27](src/a1_exploration_bridge/launch/a1_building_sim.launch#L27)
+- 参数传给 RL driver：[a1_building_sim.launch:L107](src/a1_exploration_bridge/launch/a1_building_sim.launch#L107)
+- RL driver 读取参数：[a1_rl_policy_driver.py:L62](src/a1_exploration_bridge/scripts/a1_rl_policy_driver.py#L62)
+- 稳定容差判断实现：[a1_rl_policy_driver.py:L489](src/a1_exploration_bridge/scripts/a1_rl_policy_driver.py#L489)
+
+RL 初始化状态机：
+
+| 阶段 | 目标/动作 | 延时和速率 | 切换条件 |
+| --- | --- | --- | --- |
+| 等待状态 | 等待 joint state 和 Gazebo base 状态齐全 | `startup_wait_timeout` driver 默认 `10.0s` | 直切模式下，解暂停前持续发布 policy 安全站立目标 |
+| prepare | 持续保持固定的 policy 安全站立目标，不跟随实际关节下沉 | `rl_startup_prepare_time:=5.0`，`Kp=80`，`Kd=1` | prepare 计时结束后直接进入 policy |
+| policy active | 发布 `/a1_rl_policy_driver/policy_active=True`，开始 RL 推理 | policy 节点持续运行 | bridge 继续保持 `/cmd_vel=0` 一秒，然后放开探索命令 |
+
+默认 `rl_skip_startup_poses:=true`，不会进入趴姿归位和慢速站立。只有显式设置 `rl_skip_startup_poses:=false` 时，才会启用后续的 prone/stand 参数和稳定性判断。
+
+容差日志含义：
+
+```text
+target_err: 当前限幅后的关节目标距离最终目标的最大误差，单位 rad
+actual_err: 实际关节角距离最终目标的最大误差，单位 rad
+joint_vel:  12 个关节中的最大绝对角速度，单位 rad/s
+base_w:     机身角速度模长，单位 rad/s
+```
+
+初始化相关参数说明：
+
+- `spawn_model` 在 RL 直切模式下以 policy 安全站立位、约 0.30 m 机身高度生成 A1。
+- `rl_startup_prepare_kp/kd` 控制 prepare 阶段的关节刚度，默认并推荐保持为 `80/1`。
+- `rl_startup_prone_rate` 和 `rl_startup_stand_rate` 是关节目标变化的限幅速度，不是机器人机身速度。
+- `rl_startup_prone_pos_tolerance` 和 `rl_startup_stand_pos_tolerance` 同时用于目标误差和实际关节误差判断。
+- `rl_startup_prone_settle_time` 和 `rl_startup_stand_settle_time` 要求稳定条件连续满足一段时间，避免瞬间抖动误判。
 - 关节目标、实际关节、关节速度和机身角速度都满足稳定阈值后，RL driver 才发布 policy active 并进入 policy。
-- TARE / HPHS 探索栈默认等待 policy active，再额外 2 秒才启动，避免机器人初始化时探索器提前判断完成。
-- `cmu_a1_bridge` 同样等待 policy active，再额外 2 秒保持 `/cmd_vel=0`，然后用 2 秒线性斜坡恢复 TARE / HPHS 速度。
+- TARE / HPHS 探索栈默认等待 policy active，再保持 1 秒 `/cmd_vel=0` 后直接启动探索。
 - `head_mode:=none` 是无头模式，保持原 planner yaw；`head_mode:=velocity` 是有头模式，会用速度方向 PD 控制 yaw，让 A1 的头逐渐对准运动方向。
 
 ### 固定站姿模式
@@ -1032,8 +1086,8 @@ src/a1_exploration_bridge/scripts/cmu_a1_bridge.py
 | 输入 | 输出 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | `/gazebo/model_states` | `/state_estimation` | `nav_msgs/Odometry` | 从 Gazebo A1 模型状态生成 CMU 栈需要的里程计 |
-| `/velodyne_points` | `/registered_scan` | `sensor_msgs/PointCloud2` | 清洗 Velodyne 点云并转换到 `map` frame |
-| `/velodyne_points` | `/scan` | `sensor_msgs/LaserScan` | 给 HPHS `move_base` costmap 使用的 2D scan |
+| `/livox/point_cloud` | `/registered_scan` | `sensor_msgs/PointCloud2` | 清洗 Mid360 点云并转换到 `map` frame |
+| `/livox/point_cloud` | `/scan` | `sensor_msgs/LaserScan` | 给 HPHS `move_base` costmap 使用的 2D scan |
 | `/cmu_cmd_vel` | `/cmd_vel` | `geometry_msgs/Twist` | 将 CMU `TwistStamped` 限幅后转给 A1/Gazebo |
 
 重要参数在：
@@ -1044,7 +1098,7 @@ src/a1_exploration_bridge/launch/bridge.launch
 
 ### 雷达安装位置和高度
 
-A1 模型里的 VLP-16 安装在 `trunk` 上，URDF 位置在：
+A1 模型里的 Mid360 安装在 `trunk` 上，URDF 位置在：
 
 ```text
 third_party/unitree_ros-master/robots/a1_description/xacro/robot.xacro
@@ -1053,8 +1107,8 @@ third_party/unitree_ros-master/robots/a1_description/xacro/robot.xacro
 当前外参为：
 
 ```text
-xyz="0.12 0 0.19"
-rpy="0 0 0"
+xyz="0.25 0 0.1"
+rpy="0 0.785 0"
 ```
 
 运行 TARE / HPHS 时，不需要分别去改 TARE 或 HPHS 算法内部参数。统一设置位置在桥接 launch：
@@ -1066,12 +1120,12 @@ src/a1_exploration_bridge/launch/bridge.launch
 对应参数是：
 
 ```text
-scan_offset_x:=0.12
+scan_offset_x:=0.25
 scan_offset_y:=0.0
-scan_offset_z:=0.19
+scan_offset_z:=0.1
 ```
 
-这三个值表示雷达相对 A1 机体局部坐标原点的安装偏移，单位是米：`x` 向前，`y` 向左，`z` 向上。`cmu_a1_bridge.py` 会用它们把 `/velodyne_points` 注册到 `/registered_scan`，并生成 HPHS `move_base` 使用的 `/scan`。
+这三个值表示雷达相对 A1 机体局部坐标原点的安装偏移，单位是米：`x` 向前，`y` 向左，`z` 向上。`cmu_a1_bridge.py` 会用它们把 `/livox/point_cloud` 注册到 `/registered_scan`，并生成 HPHS `move_base` 使用的 `/scan`。
 
 为了方便一键启动时覆盖，TARE 和 HPHS 顶层 launch 也暴露了同名参数：
 
@@ -1084,25 +1138,48 @@ src/a1_exploration_bridge/launch/hphs_a1_building.launch
 
 ```bash
 roslaunch a1_exploration_bridge tare_a1_building.launch \
-  scan_offset_x:=0.12 scan_offset_y:=0.0 scan_offset_z:=0.19
+  scan_offset_x:=0.25 scan_offset_y:=0.0 scan_offset_z:=0.1
 
 roslaunch a1_exploration_bridge hphs_a1_building.launch \
-  scan_offset_x:=0.12 scan_offset_y:=0.0 scan_offset_z:=0.19
+  scan_offset_x:=0.25 scan_offset_y:=0.0 scan_offset_z:=0.1
 ```
 
 如果使用当前临时站立驱动，A1 机体高度由 `stand_height` 控制，默认：
 
 ```text
-stand_height:=0.34
+stand_height:=0.38
 ```
 
 因此默认雷达中心离地高度约为：
 
 ```text
-stand_height + scan_offset_z = 0.34 + 0.19 = 0.53 m
+stand_height + scan_offset_z = 0.38 + 0.1 = 0.48 m
 ```
 
 注意：HPHS 上游旧 launch 里的 `vehicleHeight:=0.75` 属于旧小车仿真器 `cmu_vehicle_simulator`，当前 A1 版本没有启动它，不要用这个值来设置 A1 的雷达安装高度。
+
+### 雷达盲距离、设置方法和自体误判风险
+
+当前 Mid360 点云链路有三层距离参数，不能把它们当成同一个盲距离：
+
+| 链路 | 当前值 | 含义 | 设置位置 |
+| --- | ---: | --- | --- |
+| Mid360 原始点云 `/livox/point_cloud` | `0.10 m` | Gazebo 雷达中心的最小探测距离 | [gazebo.xacro:175](third_party/unitree_ros-master/robots/a1_description/xacro/gazebo.xacro#L175) 的 `<range><min>`，以及 [gazebo.xacro:186](third_party/unitree_ros-master/robots/a1_description/xacro/gazebo.xacro#L186) 插件的 `<min_range>` |
+| 桥接生成的 `/scan` | **正常 launch 实际为 `0.40 m`** | 过滤转换到 A1 局部坐标后水平距离小于该值的点 | [bridge.launch:31](src/a1_exploration_bridge/launch/bridge.launch#L31) 的 `laserscan_range_min` |
+| `cmu_a1_bridge.py` 参数备用值 | `0.30 m` | 只有 launch 没有传入 `~laserscan_range_min` 时才使用；正常 `bridge.launch` 会传入 `0.40 m` | [cmu_a1_bridge.py:51](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L51) |
+| 旧 `pointcloud2livox.py` 转换路径 | `0.20 m` | 过滤距离雷达中心小于该值的点 | [gazeboSim.launch:101](third_party/unitree_guide/unitree_guide/launch/gazeboSim.launch#L101) 和 [pointcloud2livox.py:318](third_party/unitree_guide/unitree_guide/scripts/pointcloud2livox.py#L318) |
+
+正常 TARE / HPHS 启动默认直接使用 `/livox/point_cloud`，`start_pointcloud2livox` 默认是 `false`，所以旧转换路径的 `0.20 m` 默认不会生效。原始点云和 `/registered_scan` 不会因为 `/scan` 的 `0.40 m` 过滤而被过滤；桥接节点只对 `/scan` 做该距离过滤，点云注册路径仍保留所有有限点。
+
+修改盲距离时按用途选择：
+
+1. 要修改 Gazebo Mid360 原始点云的最小探测距离，同时修改 `gazebo.xacro` 中的 `<range><min>` 和插件 `<min_range>`，保持两处一致。该值只影响仿真传感器输出，不会改变真实 Mid360 硬件的物理盲区。
+2. 要修改导航使用的 `/scan` 近距离过滤，修改 [bridge.launch:31](src/a1_exploration_bridge/launch/bridge.launch#L31) 的 `laserscan_range_min`，然后重启 TARE / HPHS。当前值为 `0.40 m`；若改为 `0.30 m`，正常启动时 `/scan` 才会按 `0.30 m` 过滤。
+3. 只有显式启用 `start_pointcloud2livox:=true` 时，才需要修改旧转换路径的 `laser_blind` 参数；它与 `/scan` 的 `laserscan_range_min` 相互独立。
+
+当前存在把机器人自身误判为障碍物的风险：雷达安装高度约 `0.10 m`，俯视角约 `45°`，可能扫描到 A1 的机身、腿或支架；[cmu_a1_bridge.py:157](src/a1_exploration_bridge/scripts/cmu_a1_bridge.py#L157) 的 `/registered_scan` 路径只做坐标变换，没有按 A1 外形做自体点过滤。可能的结果是地图出现自身障碍点，局部规划器停止、绕行或振荡。它通常不会直接产生把机器人打倒的力，但会增加错误运动指令和摔倒风险，不能作为零风险配置。
+
+`/scan` 的近距离过滤只能减少很近的自体点，不能代替完整的机器人自体滤波。正式运行前，应根据 A1 URDF 的机身和四腿外形，在点云进入 `/registered_scan` / `sensor_scan` 前增加自体点过滤。
 
 常用参数：
 
@@ -1110,16 +1187,16 @@ stand_height + scan_offset_z = 0.34 + 0.19 = 0.53 m
 roslaunch a1_exploration_bridge bridge.launch \
   state_source:=gazebo_model_states \
   model_name:=a1_gazebo \
-  scan_in:=/velodyne_points \
+  scan_in:=/livox/point_cloud \
   registered_scan_out:=/registered_scan \
   laserscan_out:=/scan \
   transform_scan_to_map:=true \
   tf_time_offset:=0.02 \
-  scan_offset_x:=0.12 \
+  scan_offset_x:=0.25 \
   scan_offset_y:=0.0 \
-  scan_offset_z:=0.19 \
-  max_linear:=1.0 \
-  max_angular:=1.5
+  scan_offset_z:=0.1 \
+  max_linear:=0.75 \
+  max_angular:=0.75
 ```
 
 ## 验收命令

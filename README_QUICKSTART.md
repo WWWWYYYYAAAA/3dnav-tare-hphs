@@ -184,11 +184,12 @@ max_angular:=1.5             cmu_a1_bridge 输出 /cmd_vel 角速度限幅，rad
 A1 启动安全：
 
 ```text
-spawn_z:=0.30                   A1 趴姿初始机身高度
-spawn_joint_args:=...           spawn_model 初始 12 关节趴姿，默认已填好
-rl_startup_damping_time:=5.0    初始 0 力矩 5 秒
-rl_startup_damping_kp:=0.0      0 力矩阶段 Kp
-rl_startup_damping_kd:=0.0      0 力矩阶段 Kd
+spawn_z:=0.30                   A1 初始机身高度
+spawn_joint_args:=...           RL 直切模式使用 policy 安全站立位
+rl_skip_startup_poses:=true     跳过 prone/stand 中间阶段
+rl_startup_prepare_time:=5.0    prepare 保持 5 秒
+rl_startup_prepare_kp:=80.0     prepare 阶段 Kp
+rl_startup_prepare_kd:=1.0      prepare 阶段 Kd
 rl_startup_prone_kp:=80.0       归位标准趴姿阶段 Kp
 rl_startup_prone_kd:=1.0        归位标准趴姿阶段 Kd
 rl_startup_prone_rate:=1.0      归位标准趴姿关节目标变化率限幅，rad/s
@@ -196,8 +197,8 @@ rl_startup_stand_kp:=80.0       慢站阶段 Kp
 rl_startup_stand_kd:=1.0        慢站阶段 Kd
 rl_startup_stand_rate:=0.75      慢站阶段关节目标变化率限幅，rad/s
 startup_wait_for_policy:=true   bridge 等 RL driver 进入 policy
-startup_cmd_hold_time:=2.0      policy active 后再保持 2 秒零速度
-startup_cmd_ramp_time:=2.0      再用 2 秒把 planner 速度平滑放开
+startup_cmd_hold_time:=1.0      policy active 后保持 1 秒零速度
+startup_cmd_ramp_time:=0.0      1 秒后直接放开 planner 速度
 command_timeout:=0.5            planner 停止发布后 bridge 持续输出零速度
 cmd_publish_rate:=20.0          bridge 定时发布 /cmd_vel，探索结束后也保持 RL 静止命令
 head_mode:=none                 无头模式；改成 velocity 后使用速度方向 yaw PD

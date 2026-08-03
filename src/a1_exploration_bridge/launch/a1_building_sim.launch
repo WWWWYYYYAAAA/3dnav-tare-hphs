@@ -14,6 +14,7 @@
   <arg name="motion_mode" default="rl"/>
   <arg name="use_standing_driver" default="true"/>
   <arg name="stand_height" default="0.38"/>
+  <arg name="stand_calf_q" default="-1.3"/>
   <arg name="stand_cmd_vel_topic" default="/cmd_vel"/>
   <arg name="stand_tf_model_name" default="a1_gazebo"/>
   <arg name="motion_max_linear" default="1.0"/>
@@ -24,16 +25,20 @@
   <arg name="rl_policy_decimation" default="1"/>
   <arg name="rl_action_scale" default="0.25"/>
   <arg name="rl_policy_active_topic" default="/a1_rl_policy_driver/policy_active"/>
-  <arg name="rl_startup_damping_time" default="5.0"/>
-  <arg name="rl_startup_damping_kp" default="0.0"/>
-  <arg name="rl_startup_damping_kd" default="0.0"/>
+  <arg name="rl_skip_startup_poses" default="false"/>
+  <arg name="rl_startup_prepare_time" default="5.0"/>
+  <arg name="rl_startup_prepare_kp" default="80.0"/>
+  <arg name="rl_startup_prepare_kd" default="1.0"/>
   <arg name="rl_startup_prone_kp" default="80.0"/>
   <arg name="rl_startup_prone_kd" default="1.0"/>
   <arg name="rl_startup_prone_rate" default="1.0"/>
   <arg name="rl_startup_prone_min_time" default="2.0"/>
+  <arg name="rl_startup_prone_max_time" default="8.0"/>
   <arg name="rl_startup_prone_settle_time" default="0.5"/>
   <arg name="rl_startup_prone_pos_tolerance" default="0.10"/>
   <arg name="rl_startup_prone_vel_tolerance" default="0.35"/>
+  <arg name="rl_startup_prone_contact_tolerance" default="0.35"/>
+  <arg name="rl_startup_prone_contact_vel_tolerance" default="0.75"/>
   <arg name="rl_startup_stand_kp" default="80.0"/>
   <arg name="rl_startup_stand_kd" default="1.0"/>
   <arg name="rl_startup_stand_rate" default="0.75"/>
@@ -42,6 +47,7 @@
   <arg name="rl_startup_stand_settle_time" default="1.0"/>
   <arg name="rl_startup_stand_pos_tolerance" default="0.12"/>
   <arg name="rl_startup_stand_vel_tolerance" default="0.35"/>
+  <arg name="rl_startup_stand_calf_q" default="-1.3"/>
   <arg name="rl_startup_base_ang_vel_tolerance" default="0.6"/>
   <arg name="rl_kp" default="80.0"/>
   <arg name="rl_kd" default="1.0"/>
@@ -51,6 +57,8 @@
   <arg name="rl_cmd_lin_x_scale" default="2.0"/>
   <arg name="rl_cmd_lin_y_scale" default="2.0"/>
   <arg name="rl_cmd_ang_z_scale" default="0.25"/>
+  <arg name="start_pointcloud2livox" default="false"/>
+  <arg name="livox_raw_scan_topic" default="/livox/raw_scan"/>
 
   <env name="GAZEBO_MODEL_PATH" value="$(find unitree_gazebo)/models:$(optenv GAZEBO_MODEL_PATH)"/>
   <env name="GAZEBO_MODEL_DATABASE_URI" value=""/>
@@ -61,12 +69,14 @@
     <arg name="rname" value="$(arg rname)"/>
     <arg name="wname" value="$(arg wname)"/>
     <arg name="gui" value="$(arg gui)"/>
-    <arg name="paused" value="$(arg paused)"/>
+    <arg name="paused" value="$(eval 'true' if arg('motion_mode') == 'rl' or (arg('motion_mode') == 'standing' and arg('use_standing_driver') in [True, 'true', 'True', '1']) else arg('paused'))"/>
     <arg name="headless" value="$(arg headless)"/>
     <arg name="debug" value="$(arg debug)"/>
     <arg name="spawn_z" value="$(arg spawn_z)"/>
-    <arg name="spawn_joint_args" value="$(eval arg('safe_stand_joint_args') if arg('motion_mode') == 'standing' else arg('spawn_joint_args'))"/>
-    <arg name="spawn_extra_args" value="-unpause"/>
+    <arg name="spawn_joint_args" value="$(eval arg('safe_stand_joint_args') if arg('motion_mode') == 'standing' or (arg('motion_mode') == 'rl' and arg('rl_skip_startup_poses') in [True, 'true', 'True', '1']) else arg('spawn_joint_args'))"/>
+    <arg name="spawn_extra_args" value="$(eval '' if arg('motion_mode') == 'rl' or (arg('motion_mode') == 'standing' and arg('use_standing_driver') in [True, 'true', 'True', '1']) else '-unpause')"/>
+    <arg name="start_pointcloud2livox" value="$(arg start_pointcloud2livox)"/>
+    <arg name="livox_raw_scan_topic" value="$(arg livox_raw_scan_topic)"/>
   </include>
 
   <node if="$(eval arg('motion_mode') == 'standing' and arg('use_standing_driver') in [True, 'true', 'True', '1'])"
@@ -75,6 +85,15 @@
     <param name="model_name" value="$(arg stand_tf_model_name)"/>
     <param name="cmd_vel_topic" value="$(arg stand_cmd_vel_topic)"/>
     <param name="stand_height" value="$(arg stand_height)"/>
+    <param name="calf_q" value="$(arg stand_calf_q)"/>
+    <param name="unpause_after_ready" value="true"/>
+    <param name="rate" value="100.0"/>
+    <param name="hip_kp" value="180.0"/>
+    <param name="hip_kd" value="8.0"/>
+    <param name="thigh_kp" value="180.0"/>
+    <param name="thigh_kd" value="8.0"/>
+    <param name="calf_kp" value="300.0"/>
+    <param name="calf_kd" value="15.0"/>
     <param name="max_linear" value="$(arg motion_max_linear)"/>
     <param name="max_angular" value="$(arg motion_max_angular)"/>
   </node>
@@ -87,20 +106,25 @@
     <param name="policy_method" value="$(arg rl_policy_method)"/>
     <param name="policy_active_topic" value="$(arg rl_policy_active_topic)"/>
     <param name="cmd_vel_topic" value="$(arg rl_cmd_vel_topic)"/>
+    <param name="unpause_after_ready" value="true"/>
+    <param name="skip_startup_poses" value="$(arg rl_skip_startup_poses)"/>
     <param name="max_linear" value="$(arg motion_max_linear)"/>
     <param name="max_angular" value="$(arg motion_max_angular)"/>
     <param name="policy_decimation" value="$(arg rl_policy_decimation)"/>
     <param name="action_scale" value="$(arg rl_action_scale)"/>
-    <param name="startup_damping_time" value="$(arg rl_startup_damping_time)"/>
-    <param name="startup_damping_kp" value="$(arg rl_startup_damping_kp)"/>
-    <param name="startup_damping_kd" value="$(arg rl_startup_damping_kd)"/>
+    <param name="startup_prepare_time" value="$(arg rl_startup_prepare_time)"/>
+    <param name="startup_prepare_kp" value="$(arg rl_startup_prepare_kp)"/>
+    <param name="startup_prepare_kd" value="$(arg rl_startup_prepare_kd)"/>
     <param name="startup_prone_kp" value="$(arg rl_startup_prone_kp)"/>
     <param name="startup_prone_kd" value="$(arg rl_startup_prone_kd)"/>
     <param name="startup_prone_rate" value="$(arg rl_startup_prone_rate)"/>
     <param name="startup_prone_min_time" value="$(arg rl_startup_prone_min_time)"/>
+    <param name="startup_prone_max_time" value="$(arg rl_startup_prone_max_time)"/>
     <param name="startup_prone_settle_time" value="$(arg rl_startup_prone_settle_time)"/>
     <param name="startup_prone_pos_tolerance" value="$(arg rl_startup_prone_pos_tolerance)"/>
     <param name="startup_prone_vel_tolerance" value="$(arg rl_startup_prone_vel_tolerance)"/>
+    <param name="startup_prone_contact_tolerance" value="$(arg rl_startup_prone_contact_tolerance)"/>
+    <param name="startup_prone_contact_vel_tolerance" value="$(arg rl_startup_prone_contact_vel_tolerance)"/>
     <param name="startup_stand_kp" value="$(arg rl_startup_stand_kp)"/>
     <param name="startup_stand_kd" value="$(arg rl_startup_stand_kd)"/>
     <param name="startup_stand_rate" value="$(arg rl_startup_stand_rate)"/>
@@ -109,6 +133,7 @@
     <param name="startup_stand_settle_time" value="$(arg rl_startup_stand_settle_time)"/>
     <param name="startup_stand_pos_tolerance" value="$(arg rl_startup_stand_pos_tolerance)"/>
     <param name="startup_stand_vel_tolerance" value="$(arg rl_startup_stand_vel_tolerance)"/>
+    <param name="startup_stand_calf_q" value="$(arg rl_startup_stand_calf_q)"/>
     <param name="startup_base_ang_vel_tolerance" value="$(arg rl_startup_base_ang_vel_tolerance)"/>
     <param name="hip_kp" value="$(arg rl_kp)"/>
     <param name="thigh_kp" value="$(arg rl_kp)"/>

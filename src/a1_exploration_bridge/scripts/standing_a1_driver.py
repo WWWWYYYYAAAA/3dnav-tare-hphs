@@ -2,11 +2,14 @@
 """Temporary A1 Gazebo driver: fixed standing pose plus cmd_vel body motion."""
 
 import math
+import threading
+import time
 
 import rospy
 from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from geometry_msgs.msg import Quaternion, Twist
+from std_srvs.srv import Empty
 from unitree_legged_msgs.msg import MotorCmd
 
 
@@ -19,12 +22,32 @@ class StandingA1Driver:
         self.command_timeout = rospy.get_param("~command_timeout", 0.5)
         self.stand_height = rospy.get_param("~stand_height", 0.38)
         self.drive_model_state = rospy.get_param("~drive_model_state", True)
+        self.unpause_after_ready = rospy.get_param("~unpause_after_ready", False)
+        self.startup_wait_timeout = rospy.get_param("~startup_wait_timeout", 10.0)
         self.max_linear = rospy.get_param("~max_linear", 1.0)
         self.max_angular = rospy.get_param("~max_angular", 1.2)
 
-        self.hip_q = rospy.get_param("~hip_q", 0.0)
-        self.thigh_q = rospy.get_param("~thigh_q", 0.67)
-        self.calf_q = rospy.get_param("~calf_q", -1.3)
+        # Keep the asymmetric hip/thigh posture used by safe_stand_joint_args.
+        # The calf target remains the original standing value so it is actively
+        # driven from the safe spawn pose instead of being frozen at spawn.
+        safe_targets = {
+            "FL": (-0.15, 0.55, -1.3),
+            "FR": (0.15, 0.55, -1.3),
+            "RL": (-0.15, 0.70, -1.3),
+            "RR": (0.15, 0.70, -1.3),
+        }
+        common_targets = {
+            "hip": rospy.get_param("~hip_q", None),
+            "thigh": rospy.get_param("~thigh_q", None),
+            "calf": rospy.get_param("~calf_q", None),
+        }
+        self.joint_targets = {}
+        for leg, defaults in safe_targets.items():
+            for joint, default in zip(("hip", "thigh", "calf"), defaults):
+                value = common_targets[joint]
+                if value is None:
+                    value = rospy.get_param("~%s_%s_q" % (leg, joint), default)
+                self.joint_targets[(leg, joint)] = value
         self.hip_kp = rospy.get_param("~hip_kp", 180.0)
         self.hip_kd = rospy.get_param("~hip_kd", 8.0)
         self.thigh_kp = rospy.get_param("~thigh_kp", 180.0)
@@ -47,14 +70,32 @@ class StandingA1Driver:
                 self.joint_publishers[(leg, joint)] = rospy.Publisher(topic, MotorCmd, queue_size=1)
 
         self.set_model_state = None
+        self.unpause_physics = None
         if self.drive_model_state:
             self.set_model_state = rospy.ServiceProxy("/gazebo/set_model_state", SetModelState)
+            try:
+                rospy.wait_for_service("/gazebo/set_model_state", timeout=10.0)
+            except rospy.ROSException:
+                rospy.logwarn("Gazebo set_model_state service is not ready yet")
+
+        self.physics_unpaused = not self.unpause_after_ready
+        if self.unpause_after_ready:
+            self.unpause_physics = rospy.ServiceProxy("/gazebo/unpause_physics", Empty)
+            try:
+                rospy.wait_for_service("/gazebo/unpause_physics", timeout=10.0)
+            except rospy.ROSException:
+                rospy.logwarn("Gazebo unpause_physics service is not ready yet")
 
         rospy.Subscriber(self.cmd_vel_topic, Twist, self._cmd_vel_cb, queue_size=10)
         rospy.Subscriber("/gazebo/model_states", ModelStates, self._model_states_cb, queue_size=10)
 
         period = 1.0 / max(1.0, self.rate_hz)
         self.timer = rospy.Timer(rospy.Duration.from_sec(period), self._timer_cb)
+        self._publish_stand_pose()
+        if self.unpause_after_ready:
+            self.startup_thread = threading.Thread(target=self._startup_unpause_worker)
+            self.startup_thread.daemon = True
+            self.startup_thread.start()
         rospy.loginfo("Standing A1 driver active for model %s", self.model_name)
 
     def _cmd_vel_cb(self, msg):
@@ -78,6 +119,9 @@ class StandingA1Driver:
     def _timer_cb(self, event):
         now = rospy.Time.now()
         self._publish_stand_pose()
+
+        if not self.physics_unpaused:
+            return
 
         if not self.drive_model_state:
             return
@@ -132,9 +176,33 @@ class StandingA1Driver:
 
     def _publish_stand_pose(self):
         for leg in ("FL", "FR", "RL", "RR"):
-            self._publish_joint(leg, "hip", self.hip_q, self.hip_kp, self.hip_kd)
-            self._publish_joint(leg, "thigh", self.thigh_q, self.thigh_kp, self.thigh_kd)
-            self._publish_joint(leg, "calf", self.calf_q, self.calf_kp, self.calf_kd)
+            self._publish_joint(leg, "hip", self.joint_targets[(leg, "hip")], self.hip_kp, self.hip_kd)
+            self._publish_joint(leg, "thigh", self.joint_targets[(leg, "thigh")], self.thigh_kp, self.thigh_kd)
+            self._publish_joint(leg, "calf", self.joint_targets[(leg, "calf")], self.calf_kp, self.calf_kd)
+
+    def _startup_unpause_worker(self):
+        deadline = time.monotonic() + max(0.0, self.startup_wait_timeout)
+        while not rospy.is_shutdown():
+            self._publish_stand_pose()
+            connected = all(
+                publisher.get_num_connections() > 0
+                for publisher in self.joint_publishers.values()
+            )
+            if connected or (self.startup_wait_timeout > 0.0 and time.monotonic() >= deadline):
+                break
+            time.sleep(0.01)
+
+        if rospy.is_shutdown():
+            return
+
+        if not connected:
+            rospy.logwarn("Standing joint controllers did not all connect before timeout; unpausing anyway")
+        try:
+            self.unpause_physics()
+            self.physics_unpaused = True
+            rospy.loginfo("Gazebo physics unpaused after standing commands were published")
+        except rospy.ServiceException as exc:
+            rospy.logerr("Failed to unpause Gazebo after standing initialization: %s", exc)
 
     def _publish_joint(self, leg, joint, q, kp, kd):
         msg = MotorCmd()

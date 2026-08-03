@@ -149,6 +149,28 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Value: true
+        - Alpha: 0.9
+          Autocompute Intensity Bounds: false
+          Autocompute Value Bounds:
+            Max Value: 1
+            Min Value: 0
+            Value: true
+          Class: rviz/PointCloud2
+          Color: 255; 0; 0
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Name: Mid360 Raw Point Cloud
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 2
+          Size (m): 0.035
+          Style: Flat Squares
+          Topic: /livox/point_cloud
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
       Enabled: true
       Name: A1 Simulation
     - Class: rviz/Group
